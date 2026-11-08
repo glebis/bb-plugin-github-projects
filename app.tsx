@@ -21,6 +21,7 @@ import type {
 } from "./src/contracts";
 import "./app.css";
 import { suggestedRepository } from "./src/model";
+import { sanitizeLayouts, resolveColumnOrder, moveColumn, toggleCollapsed, type ColumnLayout } from "./src/ui/column-layout";
 import {
   statusMove,
   withLocalStatus,
@@ -187,6 +188,11 @@ function WorkspacePage({ subPath }: PluginNavPanelProps) {
     itemId: string;
   } | null>(null);
   const [dragColumn, setDragColumn] = useState<string | null>(null);
+  const [columnLayouts, setColumnLayouts] = useState(() => sanitizeLayouts(stored("bb-github-projects:columns-v1", {})));
+  useEffect(() => persist("bb-github-projects:columns-v1", columnLayouts), [columnLayouts]);
+  const [movingColumn, setMovingColumn] = useState<string | null>(null);
+  const [columnDrop, setColumnDrop] = useState<{ name: string; placement: "before" | "after" } | null>(null);
+  const [boardAnnouncement, setBoardAnnouncement] = useState("");
   const [savingItem, setSavingItem] = useState<string | null>(null);
   const lastDragEnd = useRef(0);
   const optimisticStatus = useRef<LocalStatus | null>(null);
@@ -482,6 +488,7 @@ function WorkspacePage({ subPath }: PluginNavPanelProps) {
     }
   }
   function groupRows() {
+    const isBoard = route.view === "board";
     const groupNames = current?.board?.statusField
       ? ["Без статуса", ...current.board.statusField.options.map((o) => o.name)]
       : route.page === "mine"
@@ -501,7 +508,17 @@ function WorkspacePage({ subPath }: PluginNavPanelProps) {
           item.singleSelect[p.board?.statusField?.name || ""] || "Без статуса",
       )
       .filter((n) => !groupNames.includes(n));
-    const names = [...new Set([...groupNames, ...extra])];
+    const sourceNames = [...new Set([...groupNames, ...extra])];
+    const layoutKey = JSON.stringify([route.page, current?.board?.statusField?.id || "all-statuses"]);
+    const layout = columnLayouts[layoutKey] || { order: [], collapsed: [] };
+    const names = isBoard ? resolveColumnOrder(sourceNames, layout) : sourceNames;
+    function saveLayout(next: ColumnLayout) {
+      setColumnLayouts((previous) => ({ ...previous, [layoutKey]: next }));
+    }
+    function reorderColumn(from: string, to: string, placement: "before" | "after") {
+      saveLayout({ order: moveColumn(names, from, to, placement), collapsed: [...layout.collapsed] });
+      setBoardAnnouncement(`Колонка «${from}» перемещена ${placement === "before" ? "перед" : "после"} «${to}».`);
+    }
     if (!filtered.length)
       return (
         <div className="gp-empty">
@@ -533,7 +550,7 @@ function WorkspacePage({ subPath }: PluginNavPanelProps) {
         </div>
       );
     return (
-      <div className={route.view === "board" ? "gp-board" : ""}>
+      <div className={isBoard ? "gp-board" : ""} style={isBoard ? { gridTemplateColumns: names.map((name) => layout.collapsed.includes(name) ? "44px" : "min(300px, 100%)").join(" ") } : undefined}>
         {names.map((name) => {
           const items = filtered.filter(
             ({ item, p }) =>
@@ -541,14 +558,29 @@ function WorkspacePage({ subPath }: PluginNavPanelProps) {
                 "Без статуса") === name,
           );
           if (!items.length && route.view !== "board") return null;
+          const collapsed = isBoard && layout.collapsed.includes(name);
           return (
             <section
               className={
-                "gp-group" + (dragColumn === name ? " gp-drop-target" : "")
+                "gp-group" + (dragColumn === name ? " gp-drop-target" : "") +
+                (collapsed ? " gp-column-collapsed" : "") +
+                (movingColumn === name ? " gp-column-dragging" : "") +
+                (columnDrop?.name === name ? ` gp-column-drop-${columnDrop.placement}` : "")
               }
               key={name}
               data-status-column={name}
+              data-column-collapsed={collapsed || undefined}
+              aria-label={`${name}, задач: ${items.length}`}
               onDragOver={(event) => {
+                if (isBoard && movingColumn) {
+                  if (movingColumn === name) return;
+                  event.preventDefault();
+                  event.dataTransfer.dropEffect = "move";
+                  const rect = event.currentTarget.getBoundingClientRect();
+                  const placement = event.clientX < rect.left + rect.width / 2 ? "before" : "after";
+                  setColumnDrop((previous) => previous?.name === name && previous.placement === placement ? previous : { name, placement });
+                  return;
+                }
                 if (route.view !== "board" || !dropMove(name)) return;
                 event.preventDefault();
                 event.dataTransfer.dropEffect = "move";
@@ -559,19 +591,67 @@ function WorkspacePage({ subPath }: PluginNavPanelProps) {
                   !event.currentTarget.contains(
                     event.relatedTarget as Node | null,
                   )
-                )
+                ) {
                   setDragColumn((column) => (column === name ? null : column));
+                  setColumnDrop((target) => target?.name === name ? null : target);
+                }
               }}
               onDrop={(event) => {
                 if (route.view !== "board") return;
                 event.preventDefault();
+                if (movingColumn) {
+                  const rect = event.currentTarget.getBoundingClientRect();
+                  const placement = event.clientX < rect.left + rect.width / 2 ? "before" : "after";
+                  if (movingColumn !== name) reorderColumn(movingColumn, name, placement);
+                  setMovingColumn(null);
+                  setColumnDrop(null);
+                  return;
+                }
                 void moveToColumn(name);
               }}
             >
-              <h3>
+              {isBoard ? <div className="gp-column-header">
+                <h3><button type="button" className="gp-column-handle" draggable
+                  aria-label={`Переместить колонку ${name}`}
+                  aria-keyshortcuts="Alt+ArrowLeft Alt+ArrowRight"
+                  title="Перетащите колонку или используйте Alt + стрелки влево/вправо"
+                  onDragStart={(event) => {
+                    event.stopPropagation();
+                    event.dataTransfer.effectAllowed = "move";
+                    event.dataTransfer.setData("text/plain", name);
+                    setDragItem(null);
+                    setDragColumn(null);
+                    setMovingColumn(name);
+                    setColumnDrop(null);
+                  }}
+                  onDragEnd={() => { setMovingColumn(null); setColumnDrop(null); }}
+                  onKeyDown={(event) => {
+                    if (!event.altKey || !["ArrowLeft", "ArrowRight"].includes(event.key)) return;
+                    event.preventDefault();
+                    const direction = event.key === "ArrowLeft" ? -1 : 1;
+                    const neighbor = names[names.indexOf(name) + direction];
+                    if (!neighbor) return;
+                    reorderColumn(name, neighbor, direction < 0 ? "before" : "after");
+                    requestAnimationFrame(() => {
+                      const column = Array.from(rootRef.current?.querySelectorAll<HTMLElement>("[data-status-column]") || []).find((element) => element.dataset.statusColumn === name);
+                      column?.querySelector<HTMLButtonElement>(".gp-column-handle")?.focus();
+                    });
+                  }}>
+                  <svg className="gp-column-grip" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><circle cx="5" cy="3" r="1"/><circle cx="11" cy="3" r="1"/><circle cx="5" cy="8" r="1"/><circle cx="11" cy="8" r="1"/><circle cx="5" cy="13" r="1"/><circle cx="11" cy="13" r="1"/></svg>
+                  <span className="gp-column-name">{name}</span><span className="gp-count">{items.length}</span>
+                </button></h3>
+                <button type="button" className="gp-icon-button gp-column-toggle"
+                  aria-label={`${collapsed ? "Развернуть" : "Свернуть"} колонку ${name}`}
+                  aria-expanded={!collapsed}
+                  data-tooltip={collapsed ? "Развернуть колонку" : "Свернуть колонку"}
+                  onClick={() => {
+                    saveLayout(toggleCollapsed({ order: names, collapsed: layout.collapsed }, name));
+                    setBoardAnnouncement(`Колонка «${name}» ${collapsed ? "развёрнута" : "свёрнута"}.`);
+                  }}><svg className="gp-icon-glyph" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={collapsed ? "m9 6 6 6-6 6" : "m15 6-6 6 6 6"}/></svg></button>
+              </div> : <h3>
                 {name} <span className="gp-count">{items.length}</span>
-              </h3>
-              <div className="gp-rows">
+              </h3>}
+              {!collapsed && <div className="gp-rows">
                 {items.map(({ item, p }) => {
                   const due = item.text[dates[p.key]];
                   return (
@@ -605,6 +685,8 @@ function WorkspacePage({ subPath }: PluginNavPanelProps) {
                           item.reference || item.itemId,
                         );
                         setDragItem({ projectKey: p.key, itemId: item.itemId });
+                        setMovingColumn(null);
+                        setColumnDrop(null);
                       }}
                       onDragEnd={() => {
                         lastDragEnd.current = Date.now();
@@ -653,7 +735,7 @@ function WorkspacePage({ subPath }: PluginNavPanelProps) {
                 {!items.length && (
                   <p className="gp-muted">Нет задач в этой группе</p>
                 )}
-              </div>
+              </div>}
             </section>
           );
         })}
@@ -662,6 +744,7 @@ function WorkspacePage({ subPath }: PluginNavPanelProps) {
   }
   return (
     <div className="gp-app" ref={rootRef}>
+      <div className="gp-sr-only" role="status" aria-live="polite">{boardAnnouncement}</div>
       <aside className="gp-sidebar">
         <div className="gp-brand">Projects</div>
         <label className="gp-mobile-nav">

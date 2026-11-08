@@ -306,11 +306,87 @@
   align-items: start;
 }
 .gp-board .gp-group {
+  position: relative;
   margin: 12px 0;
   min-width: 0;
   min-height: 180px;
   border-radius: 8px;
   transition: background-color var(--gp-motion-fast) ease-out;
+}
+.gp-column-header {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 10px;
+}
+.gp-column-header h3 {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+}
+.gp-app .gp-column-handle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  min-width: 0;
+  padding: 6px 2px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: grab;
+}
+.gp-app .gp-column-handle:active { cursor: grabbing; }
+.gp-column-grip { width: 16px; height: 16px; flex: none; opacity: .5; }
+.gp-column-name { min-width: 0; overflow-wrap: anywhere; }
+.gp-column-handle .gp-count { flex: none; }
+.gp-board .gp-column-collapsed {
+  min-height: 220px;
+  border: 1px solid var(--gp-line);
+  background: var(--gp-soft);
+}
+.gp-column-collapsed .gp-column-header {
+  flex-direction: column-reverse;
+  margin: 0;
+  padding: 2px;
+}
+.gp-column-collapsed .gp-column-header h3 { flex: none; width: 100%; }
+.gp-column-collapsed .gp-column-handle {
+  flex-direction: column;
+  min-height: 174px;
+  gap: 12px;
+  padding: 8px 0;
+}
+.gp-column-collapsed .gp-column-name {
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
+  white-space: nowrap;
+}
+.gp-app .gp-column-collapsed .gp-column-toggle { width: 38px; height: 38px; }
+.gp-board .gp-column-dragging { opacity: .45; }
+.gp-column-drop-before::before,
+.gp-column-drop-after::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  border-radius: 2px;
+  background: var(--gp-blue);
+  pointer-events: none;
+}
+.gp-column-drop-before::before { left: -8px; }
+.gp-column-drop-after::after { right: -8px; }
+.gp-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 .gp-board .gp-drop-target {
   outline: 2px dashed var(--gp-blue);
