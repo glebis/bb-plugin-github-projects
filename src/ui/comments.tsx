@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { FormEvent, KeyboardEvent } from "react";
 import { Markdown, UrlLink, useRpc } from "@get-bb/plugin-sdk/app";
+import { IconButton } from "./icon-button";
 import type {
   rpcContract,
   ProjectItem,
@@ -63,6 +64,7 @@ export function TaskComments({
     race = useRef(0),
     bodyRef = useRef(body),
     pendingRef = useRef(false),
+    selectionToRestore = useRef<number | null>(null),
     replyContext = useRef("");
   bodyRef.current = body;
   const uploading = files.some((f) => f.state === "uploading"),
@@ -80,6 +82,13 @@ export function TaskComments({
     [onPosting],
   );
   const mention = !dismissed ? mentionAt(body, cursor) : null;
+  useLayoutEffect(() => {
+    const position = selectionToRestore.current;
+    if (position === null || !editor.current) return;
+    selectionToRestore.current = null;
+    editor.current.focus();
+    editor.current.setSelectionRange(position, position);
+  }, [body, preview]);
   useEffect(() => {
     const id = ++race.current;
     if (!mention) {
@@ -144,14 +153,11 @@ export function TaskComments({
     end = editor.current?.selectionEnd ?? start,
   ) {
     const next = replaceRange(bodyRef.current, start, end, text);
+    selectionToRestore.current = next.cursor;
     setBody(next.body);
     bodyRef.current = next.body;
     setCursor(next.cursor);
     setPreview(false);
-    requestAnimationFrame(() => {
-      editor.current?.focus();
-      editor.current?.setSelectionRange(next.cursor, next.cursor);
-    });
   }
   function format(before: string, after = "") {
     const start = editor.current?.selectionStart ?? body.length,
@@ -329,7 +335,7 @@ export function TaskComments({
                     setBody(next);
                   }
                   replyContext.current = context;
-                  setReply(c.author || "GitHub");
+                  setReply(c.author ? `@${c.author}` : "на комментарий");
                   insert(context, 0, 0);
                 }}
               >
@@ -346,7 +352,7 @@ export function TaskComments({
       )}
       {!detail && !loading && (
         <p className="gp-comments-help">
-          Обсуждение не загружено. Нажмите «Перечитать задачу» выше, чтобы
+          Обсуждение не загружено. Нажмите кнопку обновления задачи выше, чтобы
           повторить запрос.
         </p>
       )}
@@ -371,7 +377,7 @@ export function TaskComments({
         >
           {reply && (
             <div className="gp-comments-reply">
-              Ответ @{reply} · комментарий будет опубликован в общем обсуждении{" "}
+              Ответ {reply} · комментарий будет опубликован в общем обсуждении{" "}
               <button
                 type="button"
                 onClick={() => {
@@ -542,13 +548,12 @@ export function TaskComments({
                         : f.error}
                   </span>
                   {f.state === "failed" && !mediaError(f.file) && (
-                    <button
-                      type="button"
+                    <IconButton
+                      icon="RefreshCw"
+                      label={`Повторить загрузку ${f.file.name}`}
                       disabled={posting}
                       onClick={() => void upload(f.file, f.id)}
-                    >
-                      Повторить загрузку
-                    </button>
+                    />
                   )}
                   <button
                     type="button"

@@ -1,4 +1,5 @@
 import { TaskComments } from "./src/ui/comments";
+import { IconButton } from "./src/ui/icon-button";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { FormEvent, ReactNode } from "react";
 import {
@@ -115,9 +116,7 @@ function Modal({
       >
         <header>
           <h2>{title}</h2>
-          <button onClick={onClose} aria-label="Закрыть">
-            ×
-          </button>
+          <IconButton onClick={onClose} label="Закрыть" icon="X" />
         </header>
         {children}
       </div>
@@ -130,7 +129,9 @@ function Copy({ text }: { text: string }) {
   return (
     <span className="gp-copy">
       <code>{text}</code>
-      <button
+      <IconButton
+        label={copied ? "Идентификатор скопирован" : "Копировать идентификатор"}
+        icon={copied ? "Check" : "Copy"}
         onClick={async () => {
           try {
             await navigator.clipboard.writeText(text);
@@ -140,9 +141,7 @@ function Copy({ text }: { text: string }) {
             setFallback(true);
           }
         }}
-      >
-        {copied ? "Скопировано" : "Копировать"}
-      </button>
+      />
       {fallback && (
         <input
           aria-label="Скопируйте идентификатор"
@@ -745,9 +744,13 @@ function WorkspacePage({ subPath }: PluginNavPanelProps) {
             </p>
           </div>
           <div className="gp-actions">
-            <button disabled={busy} onClick={() => void load(true)}>
-              {busy ? "Обновление…" : "Обновить"}
-            </button>
+            <IconButton
+              icon="RefreshCw"
+              label="Обновить проекты"
+              busyLabel="Обновление проектов"
+              busy={busy}
+              onClick={() => void load(true)}
+            />
             {!!workspace?.projects.some((p) => p.board) && (
               <button
                 className="gp-primary"
@@ -769,9 +772,12 @@ function WorkspacePage({ subPath }: PluginNavPanelProps) {
         {error && (
           <div role="alert" className="gp-warning">
             {error}{" "}
-            <button disabled={busy} onClick={() => void load()}>
-              Повторить
-            </button>
+            <IconButton
+              icon="RefreshCw"
+              label="Повторить загрузку проектов"
+              busy={busy}
+              onClick={() => void load()}
+            />
           </div>
         )}
         {notice && (
@@ -780,12 +786,11 @@ function WorkspacePage({ subPath }: PluginNavPanelProps) {
             {noticeUrl && (
               <UrlLink href={noticeUrl}>Открыть результат в GitHub</UrlLink>
             )}{" "}
-            <button
+            <IconButton
               onClick={() => setNotice("")}
-              aria-label="Закрыть уведомление"
-            >
-              ×
-            </button>
+              label="Закрыть уведомление"
+              icon="X"
+            />
           </div>
         )}
         {workspace?.problem && (
@@ -1462,9 +1467,14 @@ function TaskDetail({
       {error && (
         <div role="alert" className="gp-warning">
           {error}{" "}
-          <button disabled={loading || pending} onClick={() => void load()}>
-            Перечитать задачу
-          </button>
+          <IconButton
+            icon="RefreshCw"
+            label="Обновить задачу"
+            busyLabel="Обновление задачи"
+            busy={loading}
+            disabled={pending}
+            onClick={() => void load()}
+          />
           <p>
             Перед повторной записью проверьте GitHub: часть изменений могла
             сохраниться.
@@ -1706,14 +1716,15 @@ function CreateTask({
             value={target}
             onChange={(e) => {
               setTarget(e.target.value);
-              if (!repositoryEdited) setRepository(repositoryFor(e.target.value));
+              if (!repositoryEdited)
+                setRepository(repositoryFor(e.target.value));
             }}
           >
             {creatable.map((p) => (
-                <option key={p.key} value={p.key}>
-                  {p.board?.title}
-                </option>
-              ))}
+              <option key={p.key} value={p.key}>
+                {p.board?.title}
+              </option>
+            ))}
           </select>
         </label>
         <label>

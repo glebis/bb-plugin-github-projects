@@ -534,6 +534,68 @@
   background: var(--gp-blue);
   color: var(--gp-on-blue);
 }
+.gp-app .gp-icon-button {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  vertical-align: middle;
+  flex: none;
+  width: 38px;
+  height: 38px;
+  min-width: 38px;
+  min-height: 38px;
+  padding: 0;
+}
+.gp-icon-glyph {
+  width: 17px;
+  height: 17px;
+}
+.gp-icon-button::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 200;
+  width: max-content;
+  max-width: 240px;
+  padding: 6px 9px;
+  border: 1px solid var(--gp-line);
+  border-radius: 6px;
+  background: var(--gp-surface);
+  color: var(--gp-fg);
+  font-size: 12px;
+  font-weight: 400;
+  white-space: normal;
+  text-align: left;
+  pointer-events: none;
+  visibility: hidden;
+}
+.gp-icon-button:hover::after,
+.gp-icon-button:focus-visible::after {
+  visibility: visible;
+}
+.gp-icon-spin {
+  animation: gp-icon-rotate 0.9s linear infinite;
+}
+@keyframes gp-icon-rotate {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .gp-icon-spin {
+    animation: none;
+  }
+}
+@media (max-width: 560px) {
+  .gp-app .gp-icon-button {
+    width: 44px;
+    height: 44px;
+    min-width: 44px;
+    min-height: 44px;
+  }
+}
 @media (max-width: 900px) {
   .gp-app {
     grid-template-columns: 170px minmax(0, 1fr);
