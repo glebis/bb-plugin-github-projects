@@ -7,6 +7,9 @@
   --gp-soft: var(--muted);
   --gp-blue: var(--primary);
   --gp-on-blue: var(--primary-foreground);
+  --gp-motion-fast: 120ms;
+  --gp-motion-settle: 180ms;
+  --gp-motion-ease: cubic-bezier(0.16, 1, 0.3, 1);
   display: grid;
   grid-template-columns: 205px minmax(0, 1fr);
   height: 100%;
@@ -58,8 +61,14 @@
   border-radius: 7px;
   padding: 7px 11px;
   min-height: 34px;
+  transition:
+    background-color var(--gp-motion-fast) ease-out,
+    border-color var(--gp-motion-fast) ease-out,
+    color var(--gp-motion-fast) ease-out,
+    opacity var(--gp-motion-fast) ease-out,
+    transform var(--gp-motion-fast) var(--gp-motion-ease);
 }
-.gp-app button:hover {
+.gp-app button:not(:disabled):hover {
   background: var(--gp-soft);
 }
 .gp-app button:disabled {
@@ -80,6 +89,7 @@
   min-width: 0;
   max-width: 100%;
   caret-color: var(--gp-blue);
+  transition: border-color var(--gp-motion-fast) ease-out;
 }
 .gp-app textarea {
   resize: vertical;
@@ -174,8 +184,8 @@
   color: var(--gp-on-blue);
   border-color: var(--gp-blue);
 }
-.gp-app .gp-primary:hover {
-  filter: brightness(0.94);
+.gp-app .gp-primary:not(:disabled):hover {
+  background: color-mix(in srgb, var(--gp-blue) 92%, var(--gp-on-blue));
 }
 .gp-toolbar {
   display: flex;
@@ -300,6 +310,7 @@
   min-width: 0;
   min-height: 180px;
   border-radius: 8px;
+  transition: background-color var(--gp-motion-fast) ease-out;
 }
 .gp-board .gp-drop-target {
   outline: 2px dashed var(--gp-blue);
@@ -361,6 +372,10 @@
   border-radius: 12px;
   text-align: left;
   align-self: start;
+  transition: border-color var(--gp-motion-fast) ease-out;
+}
+.gp-app .gp-project-card:focus-within {
+  border-color: color-mix(in srgb, var(--gp-fg) 35%, var(--gp-line));
 }
 .gp-project-card h2 {
   margin-bottom: 7px;
@@ -456,6 +471,7 @@
   z-index: 100;
   display: flex;
   justify-content: flex-end;
+  animation: gp-veil-enter var(--gp-motion-fast) ease-out;
 }
 .gp-modal {
   width: 570px;
@@ -465,6 +481,7 @@
   background: var(--gp-bg);
   padding: 26px;
   border-left: 1px solid var(--gp-line);
+  animation: gp-drawer-enter var(--gp-motion-settle) var(--gp-motion-ease);
 }
 .gp-modal > header {
   display: flex;
@@ -570,10 +587,55 @@
   text-align: left;
   pointer-events: none;
   visibility: hidden;
+  opacity: 0;
+  transform: translateY(-2px);
+  transition:
+    opacity var(--gp-motion-fast) ease-out,
+    transform var(--gp-motion-fast) var(--gp-motion-ease),
+    visibility var(--gp-motion-fast);
 }
 .gp-icon-button:hover::after,
 .gp-icon-button:focus-visible::after {
   visibility: visible;
+  opacity: 1;
+  transform: translateY(0);
+}
+@keyframes gp-veil-enter {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes gp-drawer-enter {
+  from {
+    opacity: 0;
+    transform: translateX(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+@media (hover: hover) and (pointer: fine) {
+  .gp-app button:not(:disabled):hover,
+  .gp-app input:not(:disabled):hover,
+  .gp-app select:not(:disabled):hover,
+  .gp-app textarea:not(:disabled):hover {
+    border-color: color-mix(in srgb, var(--gp-fg) 35%, var(--gp-line));
+  }
+  .gp-sidebar nav button:not(.gp-active):hover {
+    background: color-mix(in srgb, var(--gp-bg) 65%, var(--gp-soft));
+  }
+  .gp-app .gp-board .gp-task:not(:disabled):not(.gp-dragging):hover {
+    background: var(--gp-soft);
+    transform: translateY(-1px);
+  }
+  .gp-app .gp-icon-button:not(:disabled):active,
+  .gp-app .gp-primary:not(:disabled):active {
+    transform: translateY(1px);
+  }
 }
 .gp-icon-spin {
   animation: gp-icon-rotate 0.9s linear infinite;
@@ -584,6 +646,25 @@
   }
 }
 @media (prefers-reduced-motion: reduce) {
+  .gp-app {
+    --gp-motion-fast: 80ms;
+  }
+  .gp-app button {
+    transition-property: background-color, border-color, color, opacity;
+  }
+  .gp-app .gp-board .gp-task:not(:disabled):not(.gp-dragging):hover,
+  .gp-app .gp-icon-button:not(:disabled):active,
+  .gp-app .gp-primary:not(:disabled):active {
+    transform: none;
+  }
+  .gp-modal,
+  .gp-veil {
+    animation: gp-veil-enter 80ms ease-out;
+  }
+  .gp-icon-button::after {
+    transform: none;
+    transition-property: opacity, visibility;
+  }
   .gp-icon-spin {
     animation: none;
   }
