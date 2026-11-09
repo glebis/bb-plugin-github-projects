@@ -351,8 +351,6 @@
 .gp-column-handle .gp-count { flex: none; }
 .gp-board .gp-column-collapsed {
   min-height: 220px;
-  border: 1px solid var(--gp-line);
-  background: var(--gp-soft);
 }
 .gp-column-collapsed .gp-column-header {
   flex-direction: column-reverse;
@@ -365,6 +363,9 @@
   min-height: 174px;
   gap: 12px;
   padding: 8px 0;
+}
+.gp-app .gp-column-collapsed .gp-column-handle:hover {
+  background: transparent;
 }
 .gp-column-collapsed .gp-column-name {
   writing-mode: vertical-rl;
