@@ -50,7 +50,7 @@ test("flat reply contains short quoted context, original link and author", () =>
   assert.ok(result.startsWith("> Текст"));
   assert.ok(
     result.includes(
-      "[Исходный комментарий](https://github.com/a/b/issues/1#issuecomment-2) · @anna",
+      "[Original comment](https://github.com/a/b/issues/1#issuecomment-2) · @anna",
     ),
   );
   assert.ok(result.length < 330);
@@ -62,4 +62,17 @@ test("flat reply contains short quoted context, original link and author", () =>
     }).includes("@null"),
     false,
   );
+});
+
+test("reply link label follows locale without translating quoted content or author", () => {
+  const comment = {
+    body: "User text remains exactly as written",
+    url: "https://github.com/a/b#issuecomment-1",
+    author: "anna",
+  };
+  const russian = replyText(comment, "Исходный комментарий");
+  assert.match(russian, /\[Исходный комментарий\]/);
+  assert.match(russian, /> User text remains exactly as written/);
+  assert.match(russian, /@anna/);
+  assert.match(replyText(comment), /\[Original comment\]/);
 });

@@ -43,11 +43,14 @@ export function replaceRange(
     cursor: start + text.length,
   };
 }
-export function replyText(comment: {
-  body: string;
-  url: string;
-  author: string | null;
-}) {
+export function replyText(
+  comment: {
+    body: string;
+    url: string;
+    author: string | null;
+  },
+  sourceLabel = "Original comment",
+) {
   const quote = comment.body.replace(/\s+/g, " ").trim().slice(0, 180);
-  return `> ${quote}${comment.body.trim().length > 180 ? "…" : ""}\n\n[Исходный комментарий](${comment.url})${comment.author ? " · @" + comment.author : ""}\n\n`;
+  return `> ${quote}${comment.body.trim().length > 180 ? "…" : ""}\n\n[${sourceLabel}](${comment.url})${comment.author ? " · @" + comment.author : ""}\n\n`;
 }

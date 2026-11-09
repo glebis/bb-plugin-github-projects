@@ -1,6 +1,15 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { sanitizeLayouts, resolveColumnOrder, moveColumn, toggleCollapsed } from "../src/ui/column-layout.js";
+import { defaultColumnOrder, sanitizeLayouts, resolveColumnOrder, moveColumn, toggleCollapsed } from "../src/ui/column-layout.js";
+
+test("Without status is last by default while an explicitly saved layout wins", () => {
+  const source = ["Без статуса", "Todo", "In Progress", "Done", "Review", "Todo"];
+  const defaults = defaultColumnOrder(source);
+  assert.deepEqual(defaults, ["Todo", "In Progress", "Done", "Review", "Без статуса"]);
+  assert.deepEqual(resolveColumnOrder(defaults), defaults);
+  assert.deepEqual(resolveColumnOrder(defaults, {order:["Без статуса", "Done"], collapsed:["Без статуса"]}), ["Без статуса", "Done", "Todo", "In Progress", "Review"]);
+  assert.equal(source[0], "Без статуса");
+});
 
 test("saved order ignores removed statuses, deduplicates, and appends new statuses in GitHub order", () => {
   const layout = { order: ["Done", "Removed", "Todo", "Done"], collapsed: ["Done"] };

@@ -1,3 +1,4 @@
+import { I18nProvider, useI18n } from "./src/ui/i18n";
 import { TaskComments } from "./src/ui/comments";
 import { IconButton } from "./src/ui/icon-button";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -21,7 +22,7 @@ import type {
 } from "./src/contracts";
 import "./app.css";
 import { suggestedRepository } from "./src/model";
-import { sanitizeLayouts, resolveColumnOrder, moveColumn, toggleCollapsed, type ColumnLayout } from "./src/ui/column-layout";
+import { defaultColumnOrder, sanitizeLayouts, resolveColumnOrder, moveColumn, toggleCollapsed, type ColumnLayout } from "./src/ui/column-layout";
 import {
   statusMove,
   withLocalStatus,
@@ -58,11 +59,6 @@ const logins = (value: string) =>
     .filter(Boolean);
 const complete = (t: ProjectItem) =>
   t.state === "CLOSED" || t.state === "MERGED";
-const dateText = (d: string) =>
-  new Date(d + "T12:00:00").toLocaleDateString("ru-RU", {
-    day: "numeric",
-    month: "short",
-  });
 function Modal({
   title,
   children,
@@ -72,6 +68,7 @@ function Modal({
   children: ReactNode;
   onClose: () => void;
 }) {
+  const { t } = useI18n();
   const box = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const previous = document.activeElement as HTMLElement;
@@ -117,7 +114,7 @@ function Modal({
       >
         <header>
           <h2>{title}</h2>
-          <IconButton onClick={onClose} label="Закрыть" icon="X" />
+          <IconButton onClick={onClose} label={t("Закрыть")} icon="X" />
         </header>
         {children}
       </div>
@@ -125,13 +122,14 @@ function Modal({
   );
 }
 function Copy({ text }: { text: string }) {
+  const { t } = useI18n();
   const [fallback, setFallback] = useState(false),
     [copied, setCopied] = useState(false);
   return (
     <span className="gp-copy">
       <code>{text}</code>
       <IconButton
-        label={copied ? "Идентификатор скопирован" : "Копировать идентификатор"}
+        label={copied ? t("Идентификатор скопирован") : t("Копировать идентификатор")}
         icon={copied ? "Check" : "Copy"}
         onClick={async () => {
           try {
@@ -145,7 +143,7 @@ function Copy({ text }: { text: string }) {
       />
       {fallback && (
         <input
-          aria-label="Скопируйте идентификатор"
+          aria-label={t("Скопируйте идентификатор")}
           readOnly
           value={text}
           onFocus={(e) => e.target.select()}
@@ -155,6 +153,7 @@ function Copy({ text }: { text: string }) {
   );
 }
 function WorkspacePage({ subPath }: PluginNavPanelProps) {
+  const { t, localize, formatDate, number, plural, locale } = useI18n();
   const rpc = useRpc<typeof rpcContract>(),
     navigate = useBbNavigate();
   const [route, setRoute] = useState<Route>(() =>
@@ -391,7 +390,7 @@ function WorkspacePage({ subPath }: PluginNavPanelProps) {
           "Без статуса") === route.status),
   );
   if (route.sort === "title")
-    filtered.sort((a, b) => a.item.title.localeCompare(b.item.title, "ru"));
+    filtered.sort((a, b) => a.item.title.localeCompare(b.item.title, locale));
   if (route.sort === "date")
     filtered.sort((a, b) =>
       (a.item.text[dates[a.p.key]] || "9999").localeCompare(
@@ -476,17 +475,18 @@ function WorkspacePage({ subPath }: PluginNavPanelProps) {
         current ? withLocalStatus(current, previous) : current,
       );
       setNotice("");
-      setError(
-        "Не удалось изменить статус: " +
-          message(cause) +
-          ". Обновите проект перед повторной попыткой.",
-      );
+      setError(`Не удалось изменить статус: ${message(cause)}. Обновите проект перед повторной попыткой.`);
     } finally {
       optimisticStatus.current = null;
       setSavingItem(null);
       onPending(false);
     }
   }
+  const statusDisplay = (name: string) => {
+    const projects = current ? [current] : workspace?.projects ?? [];
+    const isGithubOption = projects.some(p => p.board?.statusField?.options.some(option => option.name === name));
+    return name === "Без статуса" && !isGithubOption ? t("Без статуса") : name;
+  };
   function groupRows() {
     const isBoard = route.view === "board";
     const groupNames = current?.board?.statusField
@@ -508,7 +508,7 @@ function WorkspacePage({ subPath }: PluginNavPanelProps) {
           item.singleSelect[p.board?.statusField?.name || ""] || "Без статуса",
       )
       .filter((n) => !groupNames.includes(n));
-    const sourceNames = [...new Set([...groupNames, ...extra])];
+    const sourceNames = defaultColumnOrder([...groupNames, ...extra]);
     const layoutKey = JSON.stringify([route.page, current?.board?.statusField?.id || "all-statuses"]);
     const layout = columnLayouts[layoutKey] || { order: [], collapsed: [] };
     const names = isBoard ? resolveColumnOrder(sourceNames, layout) : sourceNames;
@@ -517,21 +517,17 @@ function WorkspacePage({ subPath }: PluginNavPanelProps) {
     }
     function reorderColumn(from: string, to: string, placement: "before" | "after") {
       saveLayout({ order: moveColumn(names, from, to, placement), collapsed: [...layout.collapsed] });
-      setBoardAnnouncement(`Колонка «${from}» перемещена ${placement === "before" ? "перед" : "после"} «${to}».`);
+      setBoardAnnouncement(placement==="before"?t("Колонка «{name}» перемещена перед «{target}».",{name:statusDisplay(from),target:statusDisplay(to)}):t("Колонка «{name}» перемещена после «{target}».",{name:statusDisplay(from),target:statusDisplay(to)}));
     }
     if (!filtered.length)
       return (
         <div className="gp-empty">
-          <h3>Задач по этим условиям нет</h3>
-          <p>
-            Сбросьте фильтры или создайте задачу. Остальные проекты доступны.
-          </p>
+          <h3>{t("Задач по этим условиям нет")}</h3>
+          <p>{t("Сбросьте фильтры или создайте задачу. Остальные проекты доступны.")}</p>
           {(route.q || route.assignee || route.status) && (
             <button
               onClick={() => update({ q: "", assignee: "", status: "" }, true)}
-            >
-              Сбросить фильтры
-            </button>
+            >{t("Сбросить фильтры")}</button>
           )}{" "}
           <button
             disabled={mutationPending}
@@ -544,9 +540,7 @@ function WorkspacePage({ subPath }: PluginNavPanelProps) {
                   "",
               })
             }
-          >
-            Создать задачу
-          </button>
+          >{t("Создать задачу")}</button>
         </div>
       );
     return (
@@ -570,7 +564,7 @@ function WorkspacePage({ subPath }: PluginNavPanelProps) {
               key={name}
               data-status-column={name}
               data-column-collapsed={collapsed || undefined}
-              aria-label={`${name}, задач: ${items.length}`}
+              aria-label={t("{value0}, задач: {value1}", {value0: statusDisplay(name), value1: number(items.length)})}
               onDragOver={(event) => {
                 if (isBoard && movingColumn) {
                   if (movingColumn === name) return;
@@ -612,9 +606,9 @@ function WorkspacePage({ subPath }: PluginNavPanelProps) {
             >
               {isBoard ? <div className="gp-column-header">
                 <h3><button type="button" className="gp-column-handle" draggable
-                  aria-label={`Переместить колонку ${name}`}
+                  aria-label={t("Переместить колонку {value0}", {value0: statusDisplay(name)})}
                   aria-keyshortcuts="Alt+ArrowLeft Alt+ArrowRight"
-                  title="Перетащите колонку или используйте Alt + стрелки влево/вправо"
+                  title={t("Перетащите колонку или используйте Alt + стрелки влево/вправо")}
                   onDragStart={(event) => {
                     event.stopPropagation();
                     event.dataTransfer.effectAllowed = "move";
@@ -638,18 +632,18 @@ function WorkspacePage({ subPath }: PluginNavPanelProps) {
                     });
                   }}>
                   <svg className="gp-column-grip" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><circle cx="5" cy="3" r="1"/><circle cx="11" cy="3" r="1"/><circle cx="5" cy="8" r="1"/><circle cx="11" cy="8" r="1"/><circle cx="5" cy="13" r="1"/><circle cx="11" cy="13" r="1"/></svg>
-                  <span className="gp-column-name">{name}</span><span className="gp-count">{items.length}</span>
+                  <span className="gp-column-name">{statusDisplay(name)}</span><span className="gp-count">{number(items.length)}</span>
                 </button></h3>
                 <button type="button" className="gp-icon-button gp-column-toggle"
-                  aria-label={`${collapsed ? "Развернуть" : "Свернуть"} колонку ${name}`}
+                  aria-label={collapsed?t("Развернуть колонку {name}",{name:statusDisplay(name)}):t("Свернуть колонку {name}",{name:statusDisplay(name)})}
                   aria-expanded={!collapsed}
-                  data-tooltip={collapsed ? "Развернуть колонку" : "Свернуть колонку"}
+                  data-tooltip={collapsed ? t("Развернуть колонку") : t("Свернуть колонку")}
                   onClick={() => {
                     saveLayout(toggleCollapsed({ order: names, collapsed: layout.collapsed }, name));
-                    setBoardAnnouncement(`Колонка «${name}» ${collapsed ? "развёрнута" : "свёрнута"}.`);
+                    setBoardAnnouncement(collapsed?t("Колонка «{name}» развёрнута.",{name:statusDisplay(name)}):t("Колонка «{name}» свёрнута.",{name:statusDisplay(name)}));
                   }}><svg className="gp-icon-glyph" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={collapsed ? "m9 6 6 6-6 6" : "m15 6-6 6 6 6"}/></svg></button>
               </div> : <h3>
-                {name} <span className="gp-count">{items.length}</span>
+                {statusDisplay(name)} <span className="gp-count">{number(items.length)}</span>
               </h3>}
               {!collapsed && <div className="gp-rows">
                 {items.map(({ item, p }) => {
@@ -703,7 +697,7 @@ function WorkspacePage({ subPath }: PluginNavPanelProps) {
                       }}
                     >
                       <span className="gp-id">
-                        {item.number ? "#" + item.number : "Черновик"}
+                        {item.number ? "#" + item.number : t("Черновик")}
                       </span>
                       <span className="gp-task-title">
                         <strong>{item.title}</strong>
@@ -712,28 +706,28 @@ function WorkspacePage({ subPath }: PluginNavPanelProps) {
                           {item.reference || item.itemId}
                           {item.commentCount != null &&
                             item.commentCount > 0 &&
-                            ` · Комментарии: ${item.commentCount}`}
+                            t(" · Комментарии: {value0}", {value0: number(item.commentCount)})}
                         </small>
                       </span>
                       {visible.date &&
                         due &&
                         /^\d{4}-\d{2}-\d{2}$/.test(due) && (
                           <span className="gp-date">
-                            {dateText(due)}
-                            {complete(item) ? " · закрыто" : ""}
+                            {formatDate(new Date(due+"T12:00:00"), {day:"numeric",month:"short"})}
+                            {complete(item) ? t(" · закрыто") : ""}
                           </span>
                         )}
                       {visible.assignee && (
                         <span className="gp-assignees">
                           {item.assignees.map((a) => a.login).join(", ") ||
-                            "Не назначен"}
+                            t("Не назначен")}
                         </span>
                       )}
                     </button>
                   );
                 })}
                 {!items.length && (
-                  <p className="gp-muted">Нет задач в этой группе</p>
+                  <p className="gp-muted">{t("Нет задач в этой группе")}</p>
                 )}
               </div>}
             </section>
@@ -743,40 +737,34 @@ function WorkspacePage({ subPath }: PluginNavPanelProps) {
     );
   }
   return (
-    <div className="gp-app" ref={rootRef}>
-      <div className="gp-sr-only" role="status" aria-live="polite">{boardAnnouncement}</div>
+    <div className="gp-app" ref={rootRef} lang={locale}>
+      <div className="gp-sr-only" role="status" aria-live="polite">{localize(boardAnnouncement)}</div>
       <aside className="gp-sidebar">
-        <div className="gp-brand">Projects</div>
-        <label className="gp-mobile-nav">
-          Раздел
-          <select
-            aria-label="Раздел рабочего пространства"
+        <div className="gp-brand">{t("Проекты")}</div>
+        <label className="gp-mobile-nav">{t("Раздел")}<select
+            aria-label={t("Раздел рабочего пространства")}
             value={route.page}
             onChange={(e) => openPage(e.target.value)}
           >
-            <option value="all">Все проекты</option>
-            <option value="mine">Мои задачи</option>
+            <option value="all">{t("Все проекты")}</option>
+            <option value="mine">{t("Мои задачи")}</option>
             {workspace?.projects.map((p) => (
               <option key={p.key} value={p.key}>
                 {p.board?.title || p.target.owner + " #" + p.target.number}
               </option>
             ))}
-            <option value="settings">Настройки</option>
+            <option value="settings">{t("Настройки")}</option>
           </select>
         </label>
-        <nav aria-label="Разделы">
+        <nav aria-label={t("Разделы")}>
           <button
             className={route.page === "all" ? "gp-active" : ""}
             onClick={() => openPage("all")}
-          >
-            Все проекты
-          </button>
+          >{t("Все проекты")}</button>
           <button
             className={route.page === "mine" ? "gp-active" : ""}
             onClick={() => openPage("mine")}
-          >
-            Мои задачи
-          </button>
+          >{t("Мои задачи")}</button>
           <hr />
           {workspace?.projects.map((p) => (
             <button
@@ -791,46 +779,39 @@ function WorkspacePage({ subPath }: PluginNavPanelProps) {
           <button
             className={route.page === "settings" ? "gp-active" : ""}
             onClick={() => openPage("settings")}
-          >
-            Настройки
-          </button>
+          >{t("Настройки")}</button>
         </nav>
         <p className="gp-muted gp-identity">
-          GitHub: {me || "аккаунт не определён"}
+          GitHub: {me || t("аккаунт не определён")}
         </p>
       </aside>
-      <main className="gp-main">
+      <main className="gp-main">{!workspace&&<LanguagePicker/>}
         {mutationPending && (
-          <p className="gp-notice" role="status">
-            Запрос к GitHub выполняется. Не закрывайте задачу; повторная
-            отправка не выполняется автоматически.
-          </p>
+          <p className="gp-notice" role="status">{t("Запрос к GitHub выполняется. Не закрывайте задачу; повторная отправка не выполняется автоматически.")}</p>
         )}
         <header className="gp-top">
           <div>
             <h1>
               {route.page === "all"
-                ? "Все проекты"
+                ? t("Все проекты")
                 : route.page === "mine"
-                  ? "Мои задачи"
+                  ? t("Мои задачи")
                   : route.page === "settings"
-                    ? "Настройки"
-                    : current?.board?.title || "Проект"}
+                    ? t("Настройки")
+                    : current?.board?.title || t("Проект")}
             </h1>
             <p className="gp-muted">
               {route.page === "mine"
-                ? "Задачи аккаунта " +
-                  (me || "GitHub") +
-                  " во всех подключённых проектах"
+                ? t("Задачи аккаунта {login} во всех подключённых проектах",{login:me||"GitHub"})
                 : current?.board?.description ||
-                  "GitHub Projects · рабочее пространство"}
+                  t("GitHub Projects · рабочее пространство")}
             </p>
           </div>
           <div className="gp-actions">
             <IconButton
               icon="RefreshCw"
-              label="Обновить проекты"
-              busyLabel="Обновление проектов"
+              label={t("Обновить проекты")}
+              busyLabel={t("Обновление проектов")}
               busy={busy}
               onClick={() => void load(true)}
             />
@@ -846,18 +827,16 @@ function WorkspacePage({ subPath }: PluginNavPanelProps) {
                       "",
                   })
                 }
-              >
-                Новая задача
-              </button>
+              >{t("Новая задача")}</button>
             )}
           </div>
         </header>
         {error && (
           <div role="alert" className="gp-warning">
-            {error}{" "}
+            {localize(error)}{" "}
             <IconButton
               icon="RefreshCw"
-              label="Повторить загрузку проектов"
+              label={t("Повторить загрузку проектов")}
               busy={busy}
               onClick={() => void load()}
             />
@@ -865,19 +844,19 @@ function WorkspacePage({ subPath }: PluginNavPanelProps) {
         )}
         {notice && (
           <div className="gp-notice" role="status">
-            {notice}{" "}
+            {localize(notice)}{" "}
             {noticeUrl && (
-              <UrlLink href={noticeUrl}>Открыть результат в GitHub</UrlLink>
+              <UrlLink href={noticeUrl}>{t("Открыть результат в GitHub")}</UrlLink>
             )}{" "}
             <IconButton
               onClick={() => setNotice("")}
-              label="Закрыть уведомление"
+              label={t("Закрыть уведомление")}
               icon="X"
             />
           </div>
         )}
         {workspace?.problem && (
-          <div className="gp-warning">{workspace.problem}</div>
+          <div className="gp-warning">{localize(workspace.problem)}</div>
         )}
         {workspace?.projects
           .filter((p) => p.stale || p.problem || p.board?.warnings.length)
@@ -886,14 +865,11 @@ function WorkspacePage({ subPath }: PluginNavPanelProps) {
               <strong>
                 {p.board?.title || p.target.owner + " #" + p.target.number}:
               </strong>{" "}
-              {p.problem ||
-                p.board?.warnings.join(" ") ||
-                "Показана сохранённая версия."}{" "}
-              {p.stale && "Данные могут быть устаревшими."}
+              {p.problem?localize(p.problem):p.board?.warnings.length?p.board.warnings.map(localize).join(" "):t("Показана сохранённая версия.")}{" "}
+              {p.stale && t("Данные могут быть устаревшими.")}
               {p.fetchedAt && (
                 <small>
-                  {" "}
-                  Прочитано: {new Date(p.fetchedAt).toLocaleString("ru-RU")}
+                  {" "}{t("Прочитано:")}{" "}{formatDate(p.fetchedAt, {dateStyle:"short",timeStyle:"short"})}
                 </small>
               )}
             </div>
@@ -901,8 +877,8 @@ function WorkspacePage({ subPath }: PluginNavPanelProps) {
         {!workspace ? (
           <div className="gp-empty">
             {busy
-              ? "Загрузка проектов…"
-              : "Не удалось загрузить рабочее пространство."}
+              ? t("Загрузка проектов…")
+              : t("Не удалось загрузить рабочее пространство.")}
           </div>
         ) : !workspace.configured || route.page === "settings" ? (
           <>
@@ -917,7 +893,7 @@ function WorkspacePage({ subPath }: PluginNavPanelProps) {
               }}
             />
             <section className="gp-settings">
-              <h2>Представление</h2>
+              <h2>{t("Представление")}</h2>
               <label>
                 <input
                   type="checkbox"
@@ -927,9 +903,7 @@ function WorkspacePage({ subPath }: PluginNavPanelProps) {
                     setVisible(v);
                     persist(viewKeys.visible, v);
                   }}
-                />{" "}
-                Показывать исполнителей
-              </label>
+                />{" "}{t("Показывать исполнителей")}</label>
               <label>
                 <input
                   type="checkbox"
@@ -939,13 +913,8 @@ function WorkspacePage({ subPath }: PluginNavPanelProps) {
                     setVisible(v);
                     persist(viewKeys.visible, v);
                   }}
-                />{" "}
-                Показывать даты
-              </label>
-              <p className="gp-muted">
-                Внешний вид следует теме bb. Локальные правила обязательных
-                полей и проверки пока не применяются.
-              </p>
+                />{" "}{t("Показывать даты")}</label>
+              <p className="gp-muted">{t("Внешний вид следует теме bb. Локальные правила обязательных полей и проверки пока не применяются.")}</p>
             </section>
           </>
         ) : route.page === "all" ? (
@@ -962,7 +931,7 @@ function WorkspacePage({ subPath }: PluginNavPanelProps) {
                 </p>
                 {p.board ? (
                   <>
-                    <p>{p.board.items.length} задач</p>
+                    <p>{number(p.board.items.length)} {plural(p.board.items.length,{one:"задача",few:"задачи",many:"задач",other:"задач"})}</p>
                     {p.board.statusField?.options.map((o) => (
                       <button
                         className="gp-project-stat"
@@ -999,7 +968,7 @@ function WorkspacePage({ subPath }: PluginNavPanelProps) {
                         })
                       }
                     >
-                      <span>Без статуса</span>
+                      <span>{t("Без статуса")}</span>
                       <strong>
                         {
                           p.board.items.filter(
@@ -1011,11 +980,9 @@ function WorkspacePage({ subPath }: PluginNavPanelProps) {
                     </button>
                   </>
                 ) : (
-                  <p>Данные недоступны</p>
+                  <p>{t("Данные недоступны")}</p>
                 )}
-                <button onClick={() => openPage(p.key)}>
-                  Открыть проект →
-                </button>
+                <button onClick={() => openPage(p.key)}>{t("Открыть проект →")}</button>
               </article>
             ))}
           </div>
@@ -1023,39 +990,39 @@ function WorkspacePage({ subPath }: PluginNavPanelProps) {
           <>
             <div className="gp-toolbar">
               <input
-                aria-label="Поиск задач"
-                placeholder="Поиск по названию или номеру"
+                aria-label={t("Поиск задач")}
+                placeholder={t("Поиск по названию или номеру")}
                 value={route.q}
                 onChange={(e) => update({ q: e.target.value }, true)}
               />
               <select
-                aria-label="Исполнитель"
+                aria-label={t("Исполнитель")}
                 value={route.assignee}
                 onChange={(e) => update({ assignee: e.target.value }, true)}
               >
-                <option value="">Все исполнители</option>
+                <option value="">{t("Все исполнители")}</option>
                 {people.map((p) => (
                   <option key={p}>{p}</option>
                 ))}
               </select>
               <select
-                aria-label="Статус"
+                aria-label={t("Статус")}
                 value={route.status}
                 onChange={(e) => update({ status: e.target.value }, true)}
               >
-                <option value="">Все статусы</option>
+                <option value="">{t("Все статусы")}</option>
                 {statuses.map((s) => (
-                  <option key={s}>{s}</option>
+                  <option key={s} value={s}>{statusDisplay(s)}</option>
                 ))}
               </select>
               <select
-                aria-label="Сортировка"
+                aria-label={t("Сортировка")}
                 value={route.sort}
                 onChange={(e) => update({ sort: e.target.value }, true)}
               >
-                <option value="project">Порядок проекта</option>
-                <option value="title">По названию</option>
-                <option value="date">По выбранной дате</option>
+                <option value="project">{t("Порядок проекта")}</option>
+                <option value="title">{t("По названию")}</option>
+                <option value="date">{t("По выбранной дате")}</option>
               </select>
               <div className="gp-segment">
                 {(["list", "board"] as const).map((v) => (
@@ -1070,7 +1037,7 @@ function WorkspacePage({ subPath }: PluginNavPanelProps) {
                       update({ view: v });
                     }}
                   >
-                    {v === "list" ? "Список" : "Доска"}
+                    {v === "list" ? t("Список") : t("Доска")}
                   </button>
                 ))}
               </div>
@@ -1078,14 +1045,11 @@ function WorkspacePage({ subPath }: PluginNavPanelProps) {
             {current?.board && (
               <div className="gp-meta">
                 <span>
-                  {filtered.length} из {raw.length} задач ·{" "}
-                  <UrlLink href={current.board.url}>
-                    Открыть проект в GitHub
-                  </UrlLink>
+                  {t("{shown} из {total} {tasks}", { shown: number(filtered.length), total: number(raw.length), tasks: plural(raw.length, { one: "задача", few: "задачи", many: "задач", other: "задач" }) })} ·{" "}
+                  <UrlLink href={current.board.url}>{t("Открыть проект в GitHub")}</UrlLink>
                 </span>
                 {current.board.dateFields.length > 0 && (
-                  <label>
-                    Дата в списке{" "}
+                  <label>{t("Дата в списке")}{" "}
                     <select
                       value={dates[current.key] || ""}
                       onChange={(e) => {
@@ -1098,7 +1062,7 @@ function WorkspacePage({ subPath }: PluginNavPanelProps) {
                         update({ dateFields: next }, true);
                       }}
                     >
-                      <option value="">Не показывать</option>
+                      <option value="">{t("Не показывать")}</option>
                       {current.board.dateFields.map((f) => (
                         <option key={f.id} value={f.name}>
                           {f.name}
@@ -1113,7 +1077,7 @@ function WorkspacePage({ subPath }: PluginNavPanelProps) {
           </>
         )}
         {route.task === "new" && workspace && (
-          <Modal title="Новая задача" onClose={close}>
+          <Modal title={t("Новая задача")} onClose={close}>
             <CreateTask
               workspace={workspace}
               projectKey={route.project}
@@ -1130,8 +1094,8 @@ function WorkspacePage({ subPath }: PluginNavPanelProps) {
           <Modal
             title={
               selected.item.number
-                ? "Задача #" + selected.item.number
-                : "Черновик задачи"
+                ? t("Задача #{number}",{number:selected.item.number})
+                : t("Черновик задачи")
             }
             onClose={close}
           >
@@ -1150,6 +1114,19 @@ function WorkspacePage({ subPath }: PluginNavPanelProps) {
   );
 }
 type Rpc = ReturnType<typeof useRpc<typeof rpcContract>>;
+function LanguagePicker() {
+  const { locale, setLocale, t } = useI18n();
+  return (
+    <label className="gp-language">
+      {t("Язык")}
+      <select aria-label={t("Язык интерфейса")} value={locale}
+        onChange={event => setLocale(event.target.value === "ru" ? "ru" : "en")}>
+        <option value="en">English</option>
+        <option value="ru">Русский</option>
+      </select>
+    </label>
+  );
+}
 function Settings({
   workspace,
   rpc,
@@ -1159,6 +1136,7 @@ function Settings({
   rpc: Rpc;
   onConfigured: (w: Workspace) => void;
 }) {
+  const { t, localize } = useI18n();
   const [owner, setOwner] = useState(
       workspace.viewerLogin || workspace.projects[0]?.target.owner || "",
     ),
@@ -1179,14 +1157,14 @@ function Settings({
     t.owner.toLowerCase() + ":" + t.number;
   const savedTarget = (t: ProjectTarget) =>
     workspace.projects.some((p) => targetKey(p.target) === targetKey(t));
-  const friendlyName = (t: ProjectTarget) =>
-    workspace.projects.find((p) => targetKey(p.target) === targetKey(t))?.board
+  const friendlyName = (target: ProjectTarget) =>
+    workspace.projects.find((p) => targetKey(p.target) === targetKey(target))?.board
       ?.title ||
-    projectNames[targetKey(t)] ||
-    (found?.owner.toLowerCase() === t.owner.toLowerCase()
-      ? found.projects.find((p) => p.number === t.number)?.title
+    projectNames[targetKey(target)] ||
+    (found?.owner.toLowerCase() === target.owner.toLowerCase()
+      ? found.projects.find((p) => p.number === target.number)?.title
       : undefined) ||
-    "GitHub project #" + t.number;
+    t("Проект GitHub #{number}", { number: target.number });
   useEffect(() => {
     if (!owner && workspace.viewerLogin) setOwner(workspace.viewerLogin);
   }, [workspace.viewerLogin, owner]);
@@ -1234,82 +1212,70 @@ function Settings({
     }
   }
   return (
-    <section className="gp-settings">
+    <section className="gp-settings"><LanguagePicker/>
       <h2>
         {workspace.configured
-          ? "Подключённые проекты"
-          : "Подключите GitHub Projects"}
+          ? t("Подключённые проекты")
+          : t("Подключите GitHub Projects")}
       </h2>
-      <p className="gp-muted">
-        Используется общий GitHub-аккаунт сервера:{" "}
-        <strong>{workspace.viewerLogin || "не определён"}</strong>. Доступ и
-        авторство изменений соответствуют этому аккаунту.
-      </p>
+      <p className="gp-muted">{t("Используется общий GitHub-аккаунт сервера:")}{" "}
+        <strong>{workspace.viewerLogin || t("не определён")}</strong>{t(". Доступ и авторство изменений соответствуют этому аккаунту.")}</p>
       <form className="gp-discover" onSubmit={discover}>
-        <label>
-          Пользователь или организация
-          <input
+        <label>{t("Пользователь или организация")}<input
             required
             value={owner}
             onChange={(e) => setOwner(e.target.value)}
             placeholder="GitHub login"
           />
         </label>
-        <button disabled={busy}>{busy ? "Загрузка…" : "Найти проекты"}</button>
+        <button disabled={busy}>{busy ? t("Загрузка…") : t("Найти проекты")}</button>
       </form>
       {selected.length > 0 && (
         <section
           className="gp-connected-projects"
-          aria-label="Выбранные проекты"
+          aria-label={t("Выбранные проекты")}
         >
-          <h3>Проекты для подключения к bb</h3>
-          {selected.map((t) => {
-            const name = friendlyName(t),
-              saved = savedTarget(t);
+          <h3>{t("Проекты для подключения к bb")}</h3>
+          {selected.map((target) => {
+            const name = friendlyName(target),
+              saved = savedTarget(target);
             return (
-              <div className="gp-connected-row" key={targetKey(t)}>
+              <div className="gp-connected-row" key={targetKey(target)}>
                 <div className="gp-connected-name">
                   <strong>{name}</strong>
                   <small>
-                    {t.owner} / #{t.number} ·{" "}
-                    {saved ? "Подключён" : "Выбран, ещё не сохранён"}
+                    {target.owner} / #{target.number} ·{" "}
+                    {saved ? t("Подключён") : t("Выбран, ещё не сохранён")}
                   </small>
                 </div>
                 <button
                   type="button"
                   aria-label={
-                    (saved ? "Отключить " : "Не подключать ") +
-                    name +
-                    (saved ? " от bb" : "")
+                    saved?t("Отключить {name} от bb",{name}):t("Не подключать {name}",{name})
                   }
                   onClick={() => {
                     setSelected(
-                      selected.filter((s) => targetKey(s) !== targetKey(t)),
+                      selected.filter((s) => targetKey(s) !== targetKey(target)),
                     );
                     setRemovedName(name);
                   }}
                   disabled={busy}
                 >
-                  {saved ? "Отключить от bb" : "Не подключать"}
+                  {saved ? t("Отключить от bb") : t("Не подключать")}
                 </button>
               </div>
             );
           })}
         </section>
       )}
-      <p className="gp-connected-help">
-        Изменения вступят в силу после «Сохранить подключение». Проекты и задачи
-        в GitHub сохранятся.
-      </p>
+      <p className="gp-connected-help">{t("Изменения вступят в силу после «Сохранить подключение». Проекты и задачи в GitHub сохранятся.")}</p>
       {removedName && (
         <p className="gp-connected-pending" role="status">
-          «{removedName}» исключён из выбора. Сохраните подключение, чтобы
-          применить изменение.
-        </p>
+          {t("«{name}» исключён из выбора. Сохраните подключение, чтобы применить изменение.",{name:removedName})}</p>
       )}
       {found && (
         <fieldset disabled={busy}>
-          <legend>Проекты {found.owner}</legend>
+          <legend>{t("Проекты {owner}",{owner:found.owner})}</legend>
           {found.projects.length ? (
             found.projects.map((p) => {
               const checked = selected.some(
@@ -1346,31 +1312,26 @@ function Settings({
                   {p.title}{" "}
                   <small>
                     #{p.number}
-                    {p.closed ? " · закрыт" : ""}
+                    {p.closed ? t(" · закрыт") : ""}
                   </small>
                 </label>
               );
             })
           ) : (
-            <p>Проектов не найдено. Проверьте владельца и доступ аккаунта.</p>
+            <p>{t("Проектов не найдено. Проверьте владельца и доступ аккаунта.")}</p>
           )}
         </fieldset>
       )}
-      <label>
-        Репозиторий по умолчанию
-        <input
+      <label>{t("Репозиторий по умолчанию")}<input
           value={repository}
           onChange={(e) => setRepository(e.target.value)}
           placeholder="owner/repository"
         />
       </label>
-      <p className="gp-muted">
-        Необязателен: без репозитория создаётся черновик в проекте. Можно
-        подключить до 25 проектов.
-      </p>
+      <p className="gp-muted">{t("Необязателен: без репозитория создаётся черновик в проекте. Можно подключить до 25 проектов.")}</p>
       {error && (
         <p role="alert" className="gp-warning">
-          {error}
+          {localize(error)}
         </p>
       )}
       <button
@@ -1378,7 +1339,7 @@ function Settings({
         disabled={busy}
         onClick={() => void configure()}
       >
-        {busy ? "Сохранение…" : "Сохранить подключение"}
+        {busy ? t("Сохранение…") : t("Сохранить подключение")}
       </button>
     </section>
   );
@@ -1396,6 +1357,7 @@ function TaskDetail({
   onDone: (r: MutationResult) => Promise<void>;
   onPending: (pending: boolean) => void;
 }) {
+  const { t, localize } = useI18n();
   const [detail, setDetail] = useState<ItemDetail | null>(null),
     [title, setTitle] = useState(item.title),
     [body, setBody] = useState(item.body),
@@ -1538,59 +1500,50 @@ function TaskDetail({
               : item.itemId
           }
         />
-        {item.url && <UrlLink href={item.url}>Открыть в GitHub</UrlLink>}
+        {item.url && <UrlLink href={item.url}>{t("Открыть в GitHub")}</UrlLink>}
       </div>
       {[...new Set([...item.warnings, ...(detail?.warnings || [])])].map(
         (w) => (
           <p className="gp-warning" key={w}>
-            {w}
+            {localize(w)}
           </p>
         ),
       )}
       {error && (
         <div role="alert" className="gp-warning">
-          {error}{" "}
+          {localize(error)}{" "}
           <IconButton
             icon="RefreshCw"
-            label="Обновить задачу"
-            busyLabel="Обновление задачи"
+            label={t("Обновить задачу")}
+            busyLabel={t("Обновление задачи")}
             busy={loading}
             disabled={pending}
             onClick={() => void load()}
           />
-          <p>
-            Перед повторной записью проверьте GitHub: часть изменений могла
-            сохраниться.
-          </p>
+          <p>{t("Перед повторной записью проверьте GitHub: часть изменений могла сохраниться.")}</p>
         </div>
       )}
       {saved && (
         <p className="gp-notice" role="status">
-          {saved}
+          {localize(saved)}
         </p>
       )}
       <form onSubmit={save}>
         <fieldset disabled={pending || commentBusy || !canEdit || !detail}>
-          <label>
-            Название
-            <input
+          <label>{t("Название")}<input
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               required
               maxLength={1024}
             />
           </label>
-          <label>
-            Описание / ожидаемый результат
-            <textarea
+          <label>{t("Описание / ожидаемый результат")}<textarea
               value={body}
               onChange={(e) => setBody(e.target.value)}
               rows={6}
             />
           </label>
-          <label>
-            Исполнители · GitHub logins
-            <input
+          <label>{t("Исполнители · GitHub logins")}<input
               disabled={assignmentIncomplete}
               value={assignees}
               onChange={(e) => setAssignees(e.target.value)}
@@ -1624,7 +1577,7 @@ function TaskDetail({
                     setValues({ ...values, [f.id]: e.target.value })
                   }
                 >
-                  <option value="">Не задано</option>
+                  <option value="">{t("Не задано")}</option>
                   {f.options.map((o) => (
                     <option key={o.id} value={o.id}>
                       {o.name}
@@ -1651,16 +1604,14 @@ function TaskDetail({
           className="gp-primary"
           disabled={pending || commentBusy || (!dirtyContent && !dirtyFields)}
         >
-          {pending ? "Сохранение…" : "Сохранить в GitHub"}
+          {pending ? t("Сохранение…") : t("Сохранить в GitHub")}
         </button>
       </form>
       {!canEdit && (
-        <p className="gp-muted">
-          У текущего GitHub-аккаунта нет прав на изменение этой задачи.
-        </p>
+        <p className="gp-muted">{t("У текущего GitHub-аккаунта нет прав на изменение этой задачи.")}</p>
       )}
       <section className="gp-detail-section">
-        <h3>Другие поля GitHub</h3>
+        <h3>{t("Другие поля GitHub")}</h3>
         {[
           ...Object.entries(item.text).filter(
             ([name]) => !board.dateFields.some((f) => f.name === name),
@@ -1671,14 +1622,11 @@ function TaskDetail({
             <strong>{k}:</strong> {v}
           </p>
         ))}
-        <p className="gp-muted">
-          Проверка агентом и приёмка человеком отображаются только при наличии
-          соответствующих полей в GitHub.
-        </p>
+        <p className="gp-muted">{t("Проверка агентом и приёмка человеком отображаются только при наличии соответствующих полей в GitHub.")}</p>
       </section>
       {detail?.linkedPullRequests.length ? (
         <section className="gp-detail-section">
-          <h3>Связанные pull request</h3>
+          <h3>{t("Связанные pull request")}</h3>
           {detail.linkedPullRequests.map((pr) => (
             <div key={pr.id}>
               <UrlLink href={pr.url}>
@@ -1724,6 +1672,7 @@ function CreateTask({
   onDone: (r: MutationResult) => Promise<void>;
   onPending: (pending: boolean) => void;
 }) {
+  const { t, localize } = useI18n();
   const creatable = workspace.projects.filter((p) => p.board);
   const repositoryFor = (key: string) =>
     suggestedRepository(
@@ -1768,34 +1717,26 @@ function CreateTask({
   return (
     <form onSubmit={submit}>
       <fieldset disabled={pending}>
-        <label>
-          Название
-          <input
+        <label>{t("Название")}<input
             required
             value={title}
             maxLength={1024}
             onChange={(e) => setTitle(e.target.value)}
           />
         </label>
-        <label>
-          Описание / ожидаемый результат
-          <textarea
+        <label>{t("Описание / ожидаемый результат")}<textarea
             value={body}
             onChange={(e) => setBody(e.target.value)}
             rows={5}
           />
         </label>
-        <label>
-          Исполнители · GitHub logins
-          <input
+        <label>{t("Исполнители · GitHub logins")}<input
             value={assignees}
             onChange={(e) => setAssignees(e.target.value)}
             placeholder="login, another-login"
           />
         </label>
-        <label>
-          Проект
-          <select
+        <label>{t("Проект")}<select
             value={target}
             onChange={(e) => {
               setTarget(e.target.value);
@@ -1810,9 +1751,7 @@ function CreateTask({
             ))}
           </select>
         </label>
-        <label>
-          Репозиторий · необязательно
-          <input
+        <label>{t("Репозиторий · необязательно")}<input
             value={repository}
             onChange={(e) => {
               setRepository(e.target.value);
@@ -1824,19 +1763,16 @@ function CreateTask({
         <p className="gp-muted">
           {!workspace.projects.find((p) => p.key === target)?.board
             ?.viewerCanUpdate
-            ? "У текущего аккаунта нет прав изменять этот проект. "
+            ? t("У текущего аккаунта нет прав изменять этот проект. ")
             : ""}
           {repository.trim()
-            ? "Будет создана issue в репозитории и добавлена в проект."
-            : "Будет создан черновик в GitHub Projects. У черновиков нет комментариев."}
+            ? t("Будет создана issue в репозитории и добавлена в проект.")
+            : t("Будет создан черновик в GitHub Projects. У черновиков нет комментариев.")}
         </p>
         {error && (
           <div role="alert" className="gp-warning">
-            {error}
-            <p>
-              Перед повторной отправкой проверьте проект в GitHub, чтобы не
-              создать дубликат.
-            </p>
+            {localize(error)}
+            <p>{t("Перед повторной отправкой проверьте проект в GitHub, чтобы не создать дубликат.")}</p>
           </div>
         )}
         <button
@@ -1849,10 +1785,10 @@ function CreateTask({
           }
         >
           {pending
-            ? "Создание…"
+            ? t("Создание…")
             : repository.trim()
-              ? "Создать issue в GitHub"
-              : "Создать черновик в GitHub"}
+              ? t("Создать issue в GitHub")
+              : t("Создать черновик в GitHub")}
         </button>
       </fieldset>
     </form>
@@ -1864,6 +1800,6 @@ export default definePluginApp((app) => {
     title: "Projects",
     icon: "Github",
     path: "workspace",
-    component: WorkspacePage,
+    component: (props) => <I18nProvider><WorkspacePage {...props}/></I18nProvider>,
   });
 });

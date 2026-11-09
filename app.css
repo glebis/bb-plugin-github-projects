@@ -26,6 +26,13 @@
 .gp-app * {
   box-sizing: border-box;
 }
+.gp-language {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-bottom: 14px;
+}
 .gp-app [hidden] {
   display: none !important;
 }

@@ -45,28 +45,28 @@ export function createPlugin(
       projectUrls: {
         type: "string",
         label: "GitHub Projects",
-        description: "Ссылки на подключённые проекты, по одной на строку.",
+        description: "Connected project URLs, one per line.",
         experimental_multiline: true,
         default: "",
       },
       defaultRepository: {
         type: "string",
-        label: "Репозиторий для новых задач",
+        label: "Default repository for new tasks",
         description:
-          "Владелец/название. Пустое значение создаёт черновик проекта.",
+          "Owner/name. Leave empty to create project drafts.",
         default: "",
       },
       refreshMinutes: {
         type: "number",
-        label: "Обновлять каждые (минут)",
-        description: "0 отключает фоновое обновление.",
+        label: "Refresh interval (minutes)",
+        description: "0 disables background refresh.",
         default: 15,
       },
       tokenFile: {
         type: "string",
-        label: "Файл токена (необязательно)",
+        label: "Token file (optional)",
         description:
-          "Серверный путь к токену вместо текущей сессии gh. В интерфейс не передаётся.",
+          "Server path to a token file instead of the current gh session. Not sent to the interface.",
         default: "",
       },
     });

@@ -1,5 +1,10 @@
 /** Browser-only board presentation. These helpers never update GitHub fields. */
 export type ColumnLayout = { order: string[]; collapsed: string[] };
+/** The synthetic group has a stable ID across interface languages. */
+export function defaultColumnOrder(source: string[]): string[] {
+  const unique = [...new Set(source)];
+  return [...unique.filter(name => name !== "Без статуса"), ...unique.filter(name => name === "Без статуса")];
+}
 const MAX_COLUMNS = 200;
 const MAX_LAYOUTS = 100;
 const validName = (name: unknown): name is string => typeof name === "string" && name.length > 0 && name.length <= 2000;

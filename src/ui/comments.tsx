@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { FormEvent, KeyboardEvent } from "react";
 import { Markdown, UrlLink, useRpc } from "@get-bb/plugin-sdk/app";
+import { useI18n } from "./i18n";
 import { IconButton } from "./icon-button";
 import type {
   rpcContract,
@@ -47,6 +48,7 @@ export function TaskComments({
   onPosted: (result: MutationResult) => Promise<void>;
   onPosting: (pending: boolean) => void;
 }) {
+  const { t, localize, formatDate } = useI18n();
   const [body, setBody] = useState(""),
     [preview, setPreview] = useState(false),
     [error, setError] = useState(""),
@@ -162,7 +164,7 @@ export function TaskComments({
   function format(before: string, after = "") {
     const start = editor.current?.selectionStart ?? body.length,
       end = editor.current?.selectionEnd ?? start;
-    const text = bodyRef.current.slice(start, end) || "текст";
+    const text = bodyRef.current.slice(start, end) || t("текст");
     insert(before + text + after, start, end);
   }
   function choose(user: User) {
@@ -291,10 +293,7 @@ export function TaskComments({
       replyContext.current = "";
       await onPosted(result);
     } catch (e) {
-      setError(
-        (e instanceof Error ? e.message : String(e)) +
-          " Перед повторной публикацией проверьте обсуждение в GitHub: комментарий мог сохраниться.",
-      );
+      setError(e instanceof Error ? e.message : String(e));
     } finally {
       setPosting(false);
       onPosting(false);
@@ -302,11 +301,12 @@ export function TaskComments({
   }
   return (
     <section className="gp-comments-root gp-detail-section">
-      <h3>Обсуждение</h3>
-      {loading && !detail && <p role="status">Загрузка комментариев…</p>}
+      <h3>{t("Обсуждение")}</h3>
+      {loading && !detail && <p role="status">{t("Загрузка комментариев…")}</p>}
       {detail && !detail.comments.length && (
         <p className="gp-comments-help">
-          Пока нет комментариев.{canComment ? " Начните обсуждение ниже." : ""}
+          {t("Пока нет комментариев.")}
+          {canComment ? " " + t("Начните обсуждение ниже.") : ""}
         </p>
       )}
       {detail?.comments.map((c) => (
@@ -314,18 +314,22 @@ export function TaskComments({
           <header>
             <strong>{c.author || "GitHub"}</strong>
             <time dateTime={c.createdAt}>
-              {new Date(c.createdAt).toLocaleString("ru-RU")}
+              {formatDate(c.createdAt, {
+                dateStyle: "medium",
+                timeStyle: "short",
+                hour12: false,
+              })}
             </time>
           </header>
           <Markdown content={c.body} className="gp-comments-markdown" />
           <footer>
-            <UrlLink href={c.url}>Комментарий в GitHub</UrlLink>
+            <UrlLink href={c.url}>{t("Комментарий в GitHub")}</UrlLink>
             {canComment && (
               <button
                 type="button"
                 disabled={posting || blocked}
                 onClick={() => {
-                  const context = replyText(c);
+                  const context = replyText(c, t("Исходный комментарий"));
                   if (replyContext.current) {
                     const next = bodyRef.current.replace(
                       replyContext.current,
@@ -339,7 +343,7 @@ export function TaskComments({
                   insert(context, 0, 0);
                 }}
               >
-                Ответить
+                {t("Ответить")}
               </button>
             )}
           </footer>
@@ -347,19 +351,21 @@ export function TaskComments({
       ))}
       {detail?.commentsHasMore && (
         <button disabled={loading} onClick={onLoadMore}>
-          {loading ? "Загрузка…" : "Загрузить ещё комментарии"}
+          {loading ? t("Загрузка…") : t("Загрузить ещё комментарии")}
         </button>
       )}
       {!detail && !loading && (
         <p className="gp-comments-help">
-          Обсуждение не загружено. Нажмите кнопку обновления задачи выше, чтобы
-          повторить запрос.
+          {t(
+            "Обсуждение не загружено. Нажмите кнопку обновления задачи выше, чтобы повторить запрос.",
+          )}
         </p>
       )}
       {item.kind === "DraftIssue" ? (
         <p className="gp-comments-help">
-          Черновики Projects не поддерживают комментарии. Преобразуйте задачу в
-          issue в GitHub.
+          {t(
+            "Черновики Projects не поддерживают комментарии. Преобразуйте задачу в issue в GitHub.",
+          )}
         </p>
       ) : canComment ? (
         <form
@@ -377,7 +383,10 @@ export function TaskComments({
         >
           {reply && (
             <div className="gp-comments-reply">
-              Ответ {reply} · комментарий будет опубликован в общем обсуждении{" "}
+              {t(
+                "Ответ {recipient} · комментарий будет опубликован в общем обсуждении",
+                { recipient: localize(reply) },
+              )}{" "}
               <button
                 type="button"
                 onClick={() => {
@@ -387,7 +396,7 @@ export function TaskComments({
                   setReply(null);
                 }}
               >
-                Отменить ответ
+                {t("Отменить ответ")}
               </button>
             </div>
           )}
@@ -397,18 +406,21 @@ export function TaskComments({
               aria-pressed={!preview}
               onClick={() => setPreview(false)}
             >
-              Редактор
+              {t("Редактор")}
             </button>
             <button
               type="button"
               aria-pressed={preview}
               onClick={() => setPreview(true)}
             >
-              Предпросмотр
+              {t("Предпросмотр")}
             </button>
           </div>
           {!preview && (
-            <div className="gp-comments-toolbar" aria-label="Форматирование">
+            <div
+              className="gp-comments-toolbar"
+              aria-label={t("Форматирование")}
+            >
               {[
                 ["Жирный", "**", "**"],
                 ["Курсив", "_", "_"],
@@ -418,13 +430,13 @@ export function TaskComments({
                 ["Цитата", "\n> ", ""],
               ].map(([label, before, after]) => (
                 <button
-                  key={label}
+                  key={t(label)}
                   type="button"
                   disabled={posting || blocked}
                   onMouseDown={(e) => e.preventDefault()}
                   onClick={() => format(before, after)}
                 >
-                  {label}
+                  {t(label)}
                 </button>
               ))}
             </div>
@@ -434,7 +446,9 @@ export function TaskComments({
               <Markdown
                 content={
                   body ||
-                  "Предпросмотр пуст. Вернитесь в редактор и напишите комментарий."
+                  t(
+                    "Предпросмотр пуст. Вернитесь в редактор и напишите комментарий.",
+                  )
                 }
                 className="gp-comments-markdown"
               />
@@ -442,7 +456,7 @@ export function TaskComments({
           ) : (
             <div className="gp-comments-editor">
               <label htmlFor={"gp-comment-" + item.itemId}>
-                Новый комментарий
+                {t("Новый комментарий")}
               </label>
               <textarea
                 id={"gp-comment-" + item.itemId}
@@ -450,7 +464,7 @@ export function TaskComments({
                 value={body}
                 disabled={posting || blocked}
                 rows={5}
-                placeholder="Markdown, @login, изображения и видео"
+                placeholder={t("Markdown, @login, изображения и видео")}
                 onChange={(e) => {
                   setBody(e.target.value);
                   setCursor(e.target.selectionStart);
@@ -488,7 +502,7 @@ export function TaskComments({
                   id="gp-comment-users"
                   className="gp-comments-users"
                   role="listbox"
-                  aria-label="Участники GitHub"
+                  aria-label={t("Участники GitHub")}
                 >
                   {users.map((u, i) => (
                     <button
@@ -508,7 +522,7 @@ export function TaskComments({
                 </div>
               )}
               {suggestionError && mention && (
-                <p className="gp-comments-help">{suggestionError}</p>
+                <p className="gp-comments-help">{localize(suggestionError)}</p>
               )}
             </div>
           )}
@@ -528,12 +542,12 @@ export function TaskComments({
             disabled={posting || blocked}
             onClick={() => picker.current?.click()}
           >
-            Добавить изображения или видео
+            {t("Добавить изображения или видео")}
           </button>
           <p className="gp-comments-help">
-            Файлы загружаются в GitHub при добавлении. PNG, JPG, JPEG, GIF,
-            WEBP, SVG, MP4, MOV, WEBM · до 5 МиБ каждый. Можно перетащить файлы
-            или вставить изображение из буфера.
+            {t(
+              "Файлы загружаются в GitHub при добавлении. PNG, JPG, JPEG, GIF, WEBP, SVG, MP4, MOV, WEBM · до 5 МиБ каждый. Можно перетащить файлы или вставить изображение из буфера.",
+            )}
           </p>
           {files.length > 0 && (
             <ul className="gp-comments-files">
@@ -542,15 +556,17 @@ export function TaskComments({
                   <span>
                     <strong>{f.file.name}</strong> ·{" "}
                     {f.state === "uploading"
-                      ? "Загрузка в GitHub…"
+                      ? t("Загрузка в GitHub…")
                       : f.state === "ready"
-                        ? "Загружен в GitHub"
-                        : f.error}
+                        ? t("Загружен в GitHub")
+                        : localize(f.error || "")}
                   </span>
                   {f.state === "failed" && !mediaError(f.file) && (
                     <IconButton
                       icon="RefreshCw"
-                      label={`Повторить загрузку ${f.file.name}`}
+                      label={t("Повторить загрузку {name}", {
+                        name: f.file.name,
+                      })}
                       disabled={posting}
                       onClick={() => void upload(f.file, f.id)}
                     />
@@ -560,7 +576,7 @@ export function TaskComments({
                     disabled={f.state === "uploading" || posting}
                     onClick={() => removeFile(f)}
                   >
-                    Убрать из комментария
+                    {t("Убрать из комментария")}
                   </button>
                 </li>
               ))}
@@ -568,13 +584,17 @@ export function TaskComments({
           )}
           {files.some((f) => f.state === "ready") && (
             <p className="gp-comments-help">
-              «Убрать» удаляет вставку из текста. Уже загруженный файл остаётся
-              в GitHub.
+              {t(
+                "«Убрать» удаляет вставку из текста. Уже загруженный файл остаётся в GitHub.",
+              )}
             </p>
           )}
           {error && (
             <p role="alert" className="gp-comments-error">
-              {error}
+              {localize(error)}{" "}
+              {t(
+                "Перед повторной публикацией проверьте обсуждение в GitHub: комментарий мог сохраниться.",
+              )}
             </p>
           )}
           <button
@@ -583,16 +603,16 @@ export function TaskComments({
             disabled={!body.trim() || posting || uploading || failed || blocked}
           >
             {posting
-              ? "Публикация…"
+              ? t("Публикация…")
               : uploading
-                ? "Дождитесь загрузки файлов"
-                : "Опубликовать комментарий"}
+                ? t("Дождитесь загрузки файлов")
+                : t("Опубликовать комментарий")}
           </button>
         </form>
       ) : (
         !loading && (
           <p className="gp-comments-help">
-            Текущий GitHub-аккаунт не может комментировать эту задачу.
+            {t("Текущий GitHub-аккаунт не может комментировать эту задачу.")}
           </p>
         )
       )}
