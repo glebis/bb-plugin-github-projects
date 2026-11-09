@@ -651,6 +651,10 @@
   width: 17px;
   height: 17px;
 }
+.gp-app .gp-icon-button.gp-icon-refresh {
+  border: 0;
+  background: transparent;
+}
 .gp-icon-button::after {
   content: attr(data-tooltip);
   position: absolute;

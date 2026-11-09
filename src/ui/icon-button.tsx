@@ -26,7 +26,7 @@ export function IconButton({
     <button
       {...props}
       type={type}
-      className={`gp-icon-button ${className}`}
+      className={`gp-icon-button${icon === "RefreshCw" ? " gp-icon-refresh" : ""} ${className}`}
       disabled={disabled || busy}
       aria-label={description}
       aria-busy={busy || undefined}
