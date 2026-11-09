@@ -28,3 +28,38 @@ test("field preferences restore explicit visibility/filters and ignore corrupt s
   assert.deepEqual(sanitizeFieldPreferences([]),{});
   assert.deepEqual(sanitizeFieldPreferences({"glebis:1":{visible:["area","area",42],filters:{priority:"p1",bad:42}},broken:42}),{"glebis:1":{visible:["area"],filters:{priority:"p1"}}});
 });
+
+test("priority chips OR options and unset, while other fields remain AND criteria", () => {
+  assert.equal(matchesFieldFilters(board,item,{priority:["p1","p2"],area:"sync"}),true);
+  assert.equal(matchesFieldFilters(board,item,{priority:["p2",unsetFieldFilter]}),false);
+  assert.equal(matchesFieldFilters(board,{...item,singleSelect:{Area:"Sync"}},{priority:["p2",unsetFieldFilter],area:"sync"}),true);
+  assert.equal(matchesFieldFilters(board,item,{priority:["p1","p2"],area:unsetFieldFilter}),false);
+  assert.equal(matchesFieldFilters(board,item,{priority:[]}),true);
+});
+
+test("mixed deleted option IDs apply valid choices; all deleted selections are ignored", () => {
+  assert.equal(matchesFieldFilters(board,item,{priority:["deleted","p2"]}),false);
+  assert.equal(matchesFieldFilters(board,item,{priority:["deleted","p1"]}),true);
+  assert.equal(matchesFieldFilters(board,item,{priority:["deleted"],removed:["p2"]}),true);
+  assert.equal(matchesFieldFilters(board,item,{estimate:["1"],note:["missing"]}),true);
+  assert.equal(matchesFieldFilters(board,item,{estimate:"0"}),true);
+});
+
+test("legacy scalar filters survive storage and array selections are bounded/sanitized", () => {
+  const saved = sanitizeFieldPreferences({ first: { filters: { priority: "p1", area: ["sync", "sync", 5, {}, "", "x".repeat(201)], estimate: "0" } } });
+  assert.deepEqual(saved.first.filters,{priority:"p1",area:["sync"],estimate:"0"});
+  const large = sanitizeFieldPreferences({ first: { filters: { priority: Array.from({length:120},(_,i)=>String(i)) } } });
+  assert.equal((large.first.filters.priority as string[]).length,100);
+});
+
+test("chip toggle migrates scalar and removes selections without mutating input", async () => {
+  const { toggleFieldFilter, activeFieldFilterCount } = await import("../src/ui/field-preferences.js");
+  assert.deepEqual(toggleFieldFilter("p1","p2"),["p1","p2"]);
+  assert.deepEqual(toggleFieldFilter("p1","p1"),[]);
+  const selected=["p1",unsetFieldFilter];
+  assert.deepEqual(toggleFieldFilter(selected,"p1"),[unsetFieldFilter]);
+  assert.deepEqual(selected,["p1",unsetFieldFilter]);
+  assert.equal(activeFieldFilterCount(board,{priority:["p1","p2"],estimate:"0",removed:"x"}),2);
+  assert.equal(activeFieldFilterCount(board,{priority:["deleted"],area:[],estimate:["0"]}),0);
+  assert.equal(activeFieldFilterCount(board,{priority:[unsetFieldFilter,"deleted"]}),1);
+});

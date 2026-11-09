@@ -1,4 +1,8 @@
 export const appMessages: Record<string,string> = {
+  "Фильтры": "Filters",
+  "Фильтры задач": "Task filters",
+  "Активных фильтров: {count}": "Active filters: {count}",
+  "Все": "All",
   "Настройки полей проекта": "Project field settings",
   "Все значения": "All values",
   "Фильтр по полю": "Filter by field",

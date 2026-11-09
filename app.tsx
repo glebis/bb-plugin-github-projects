@@ -1,10 +1,10 @@
-import { customFields, fieldPreferencesKey, matchesFieldFilters, sanitizeFieldPreferences, unsetFieldFilter, visibleFields, type FieldPreferences } from "./src/ui/field-preferences";
+import { activeFieldFilterCount, customFields, fieldPreferencesKey, matchesFieldFilters, sanitizeFieldPreferences, toggleFieldFilter, unsetFieldFilter, visibleFields, type FieldPreferences } from "./src/ui/field-preferences";
 import { ProjectFieldEditor } from "./src/ui/project-field-editor";
 import { editableFields, fieldChanges, fieldDisplayValue } from "./src/ui/project-fields";
 import { I18nProvider, useI18n } from "./src/ui/i18n";
 import { TaskComments } from "./src/ui/comments";
 import { IconButton } from "./src/ui/icon-button";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 import type { FormEvent, ReactNode } from "react";
 import {
   definePluginApp,
@@ -178,6 +178,14 @@ function WorkspacePage({ subPath }: PluginNavPanelProps) {
   const [views, setViews] = useState<Record<string, "list" | "board">>(() =>
     viewMap(stored(viewKeys.views, stored("gp-views", {}))),
   );
+  const filterPanelId = useId();
+  const [filterPanels, setFilterPanels] = useState<Record<string, boolean>>(() => {
+    const raw = stored<unknown>("bb-github-projects:filter-panels-v1", {});
+    return raw && typeof raw === "object" && !Array.isArray(raw)
+      ? Object.fromEntries(Object.entries(raw).filter(([key, value]) => key.length <= 200 && typeof value === "boolean")) : {};
+  });
+  useEffect(() => persist("bb-github-projects:filter-panels-v1", filterPanels), [filterPanels]);
+  const filtersExpanded = filterPanels[route.page] !== false;
   const [fieldPreferences, setFieldPreferences] = useState(() => sanitizeFieldPreferences(stored(fieldPreferencesKey, {})));
   useEffect(() => persist(fieldPreferencesKey, fieldPreferences), [fieldPreferences]);
   function changeFieldPreferences(projectKey: string, patch: Partial<FieldPreferences>) {
@@ -496,7 +504,9 @@ function WorkspacePage({ subPath }: PluginNavPanelProps) {
     const isGithubOption = projects.some(p => p.board?.statusField?.options.some(option => option.name === name));
     return name === "Без статуса" && !isGithubOption ? t("Без статуса") : name;
   };
-  const activeCustomFilters = !!current && Object.values(fieldPreferences[current.key]?.filters ?? {}).some(Boolean);
+  const customFilterCount = current?.board ? activeFieldFilterCount(current.board, fieldPreferences[current.key]?.filters ?? {}) : 0;
+  const activeCustomFilters = customFilterCount > 0;
+  const activeFilterCount = Number(!!route.q) + Number(!!route.assignee) + Number(!!route.status) + customFilterCount;
   function clearFilters() {
     if (current) changeFieldPreferences(current.key, { filters: {} });
     update({ q: "", assignee: "", status: "" }, true);
@@ -1011,42 +1021,20 @@ function WorkspacePage({ subPath }: PluginNavPanelProps) {
           </div>
         ) : (
           <>
-            <div className="gp-toolbar">
-              <input
-                aria-label={t("Поиск задач")}
-                placeholder={t("Поиск по названию или номеру")}
-                value={route.q}
-                onChange={(e) => update({ q: e.target.value }, true)}
-              />
-              <select
-                aria-label={t("Исполнитель")}
-                value={route.assignee}
-                onChange={(e) => update({ assignee: e.target.value }, true)}
-              >
-                <option value="">{t("Все исполнители")}</option>
-                {people.map((p) => (
-                  <option key={p}>{p}</option>
-                ))}
-              </select>
-              <select
-                aria-label={t("Статус")}
-                value={route.status}
-                onChange={(e) => update({ status: e.target.value }, true)}
-              >
-                <option value="">{t("Все статусы")}</option>
-                {statuses.map((s) => (
-                  <option key={s} value={s}>{statusDisplay(s)}</option>
-                ))}
-              </select>
-              <select
-                aria-label={t("Сортировка")}
-                value={route.sort}
-                onChange={(e) => update({ sort: e.target.value }, true)}
-              >
-                <option value="project">{t("Порядок проекта")}</option>
-                <option value="title">{t("По названию")}</option>
-                <option value="date">{t("По выбранной дате")}</option>
-              </select>
+            <div className="gp-viewbar">
+              <button type="button" className="gp-filter-toggle" aria-expanded={filtersExpanded} aria-controls={filterPanelId}
+                onClick={() => setFilterPanels(previous => ({ ...previous, [route.page]: !filtersExpanded }))}>
+                <svg className="gp-filter-chevron" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><path d={filtersExpanded ? "m5 7 5 5 5-5" : "m7 5 5 5-5 5"}/></svg>
+                {t("Фильтры")}
+                {activeFilterCount > 0 && <span className="gp-count" aria-label={t("Активных фильтров: {count}", { count: number(activeFilterCount) })}>{number(activeFilterCount)}</span>}
+              </button>
+              {activeFilterCount > 0 && <button className="gp-filter-reset" onClick={clearFilters}>{t("Сбросить фильтры")}</button>}
+              <div className="gp-view-options">
+                <select aria-label={t("Сортировка")} value={route.sort} onChange={event => update({ sort: event.target.value }, true)}>
+                  <option value="project">{t("Порядок проекта")}</option>
+                  <option value="title">{t("По названию")}</option>
+                  <option value="date">{t("По выбранной дате")}</option>
+                </select>
               <div className="gp-segment">
                 {(["list", "board"] as const).map((v) => (
                   <button
@@ -1064,39 +1052,61 @@ function WorkspacePage({ subPath }: PluginNavPanelProps) {
                   </button>
                 ))}
               </div>
+              </div>
             </div>
-            {current?.board && customFields(current.board).length > 0 && (
-              <div className="gp-custom-controls" aria-label={t("Настройки полей проекта")}>
-                {customFields(current.board).map(field => (
-                  <label className="gp-field-filter" key={field.id}>
-                    {field.name}
-                    {field.dataType === "SINGLE_SELECT" ? <select
-                      value={fieldPreferences[current.key]?.filters[field.id] ?? ""}
-                      onChange={event => changeFieldPreferences(current.key, { filters: { ...fieldPreferences[current.key]?.filters, [field.id]: event.target.value } })}>
+            <section id={filterPanelId} className="gp-filter-panel" aria-label={t("Фильтры задач")} hidden={!filtersExpanded}>
+              <input className="gp-filter-search" aria-label={t("Поиск задач")} placeholder={t("Поиск по названию или номеру")}
+                value={route.q} onChange={event => update({ q: event.target.value }, true)}/>
+              <div className="gp-filter-controls">
+                {current?.board && customFields(current.board).map(field => {
+                  const filter = fieldPreferences[current.key]?.filters[field.id];
+                  const setFilter = (value: string | string[]) => changeFieldPreferences(current.key, { filters: { ...fieldPreferences[current.key]?.filters, [field.id]: value } });
+                  const priority = field.dataType === "SINGLE_SELECT" && (Array.isArray(filter) || field.name.toLowerCase() === "priority" || !!field.options?.length && field.options.every(option => /^P\d+$/i.test(option.name)));
+                  if (priority) {
+                    const selected = (Array.isArray(filter) ? filter : filter ? [filter] : []).filter(id => id === unsetFieldFilter || field.options?.some(option => option.id === id));
+                    return <fieldset className="gp-priority-filter" key={field.id}>
+                      <legend>{field.name}</legend>
+                      <div className="gp-priority-options">
+                        <button type="button" aria-pressed={selected.length === 0} onClick={() => setFilter([])}>{t("Все")}</button>
+                        {field.options?.map(option => <button type="button" key={option.id} aria-pressed={selected.includes(option.id)}
+                          onClick={() => setFilter(toggleFieldFilter(filter, option.id))}>{option.name}</button>)}
+                        <button type="button" aria-pressed={selected.includes(unsetFieldFilter)} onClick={() => setFilter(toggleFieldFilter(filter, unsetFieldFilter))}>{t("Не задано")}</button>
+                      </div>
+                    </fieldset>;
+                  }
+                  return <label className="gp-field-filter" key={field.id}>{field.name}
+                    {field.dataType === "SINGLE_SELECT" ? <select value={typeof filter === "string" ? filter : ""} onChange={event => setFilter(event.target.value)}>
                       <option value="">{t("Все значения")}</option>
                       <option value={unsetFieldFilter}>{t("Не задано")}</option>
                       {field.options?.map(option => <option key={option.id} value={option.id}>{option.name}</option>)}
-                    </select> : <input
-                      type={field.dataType === "DATE" ? "date" : "text"}
-                      inputMode={field.dataType === "NUMBER" ? "decimal" : undefined}
-                      placeholder={t("Фильтр по полю")}
-                      value={fieldPreferences[current.key]?.filters[field.id] ?? ""}
-                      onChange={event => changeFieldPreferences(current.key, { filters: { ...fieldPreferences[current.key]?.filters, [field.id]: event.target.value } })}/>}
-                  </label>
-                ))}
-                {activeCustomFilters && <button onClick={clearFilters}>{t("Сбросить фильтры")}</button>}
-                <details className="gp-field-visibility">
-                  <summary>{t("Поля на карточках")}</summary>
-                  <div>{customFields(current.board).map(field => <label key={field.id}>
-                    <input type="checkbox" checked={visibleFields(current.board!, fieldPreferences[current.key]).some(visible => visible.id === field.id)}
-                      onChange={event => {
-                        const ids = visibleFields(current.board!, fieldPreferences[current.key]).map(visible => visible.id);
-                        changeFieldPreferences(current.key, { visible: event.target.checked ? [...ids, field.id] : ids.filter(id => id !== field.id) });
-                      }}/>{field.name}
-                  </label>)}</div>
-                </details>
+                    </select> : <input type={field.dataType === "DATE" ? "date" : "text"} inputMode={field.dataType === "NUMBER" ? "decimal" : undefined}
+                      placeholder={t("Фильтр по полю")} value={typeof filter === "string" ? filter : ""} onChange={event => setFilter(event.target.value)}/>}
+                  </label>;
+                })}
+                <label className="gp-field-filter">{t("Исполнитель")}
+                  <select value={route.assignee} onChange={event => update({ assignee: event.target.value }, true)}>
+                    <option value="">{t("Все исполнители")}</option>
+                    {people.map(person => <option key={person}>{person}</option>)}
+                  </select>
+                </label>
+                <label className="gp-field-filter">{t("Статус")}
+                  <select value={route.status} onChange={event => update({ status: event.target.value }, true)}>
+                    <option value="">{t("Все статусы")}</option>
+                    {statuses.map(status => <option key={status} value={status}>{statusDisplay(status)}</option>)}
+                  </select>
+                </label>
+              {current?.board && customFields(current.board).length > 0 && <details className="gp-field-visibility">
+                <summary>{t("Поля на карточках")}</summary>
+                <div>{customFields(current.board).map(field => <label key={field.id}>
+                  <input type="checkbox" checked={visibleFields(current.board!, fieldPreferences[current.key]).some(visible => visible.id === field.id)}
+                    onChange={event => {
+                      const ids = visibleFields(current.board!, fieldPreferences[current.key]).map(visible => visible.id);
+                      changeFieldPreferences(current.key, { visible: event.target.checked ? [...ids, field.id] : ids.filter(id => id !== field.id) });
+                    }}/>{field.name}
+                </label>)}</div>
+              </details>}
               </div>
-            )}
+            </section>
             {current?.board && (
               <div className="gp-meta">
                 <span>

@@ -194,19 +194,44 @@
 .gp-app .gp-primary:not(:disabled):hover {
   background: color-mix(in srgb, var(--gp-blue) 92%, var(--gp-on-blue));
 }
-.gp-toolbar {
+.gp-viewbar {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 8px;
-  margin: 20px 0 13px;
+  margin: 20px 0 12px;
 }
-.gp-toolbar > input {
-  flex: 1;
-  min-width: 155px;
+.gp-app .gp-filter-toggle, .gp-app .gp-filter-reset {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  border: 0;
+  background: transparent;
 }
-.gp-toolbar select {
-  font-size: 12px;
+.gp-app .gp-filter-toggle { padding-left: 0; font-weight: 500; }
+.gp-filter-chevron { width: 16px; height: 16px; flex: none; }
+.gp-app .gp-filter-reset { font-size: 12px; }
+.gp-view-options { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-left: auto; min-width: 0; }
+.gp-view-options > select { font-size: 12px; min-width: 0; }
+.gp-filter-panel {
+  padding: 14px 0;
+  margin-bottom: 16px;
+  border-top: 1px solid var(--gp-line);
+  border-bottom: 1px solid var(--gp-line);
+}
+.gp-filter-search { width: 100%; margin-bottom: 14px; }
+.gp-filter-controls { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px 18px; }
+.gp-app .gp-priority-filter { margin: 0; padding: 0; min-width: 0; max-width: 100%; }
+.gp-priority-filter legend { font-size: 12px; margin-bottom: 5px; padding: 0; }
+.gp-priority-options { display: flex; flex-wrap: wrap; gap: 5px; }
+.gp-app .gp-priority-options button { padding: 5px 10px; font-size: 12px; }
+.gp-app .gp-priority-options button[aria-pressed="true"] {
+  background: var(--gp-blue);
+  color: var(--gp-on-blue);
+  border-color: var(--gp-blue);
+}
+.gp-app .gp-priority-options button[aria-pressed="true"]:hover {
+  background: color-mix(in srgb, var(--gp-blue) 92%, var(--gp-on-blue));
 }
 .gp-segment {
   display: flex;
@@ -227,24 +252,12 @@
   font-size: 12px;
   margin-bottom: 18px;
 }
-.gp-custom-controls {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-end;
-  gap: 12px;
-  margin-bottom: 16px;
-}
-.gp-custom-controls .gp-field-filter {
-  margin: 0;
-  min-width: 130px;
-  max-width: 100%;
-  font-size: 12px;
-}
+.gp-filter-controls .gp-field-filter { margin: 0; min-width: 130px; max-width: 100%; font-size: 12px; }
 .gp-field-filter input, .gp-field-filter select { padding: 6px 8px; }
 .gp-field-visibility { font-size: 12px; max-width: 100%; }
-.gp-field-visibility summary { padding: 7px 0; cursor: pointer; }
+.gp-field-visibility summary { padding: 8px 0; cursor: pointer; min-height: 34px; }
 .gp-field-visibility > div { display: flex; flex-wrap: wrap; gap: 10px; }
-.gp-field-visibility label { display: flex; flex-direction: row; align-items: center; gap: 5px; margin: 0; }
+.gp-field-visibility label { display: flex; flex-direction: row; align-items: center; gap: 5px; margin: 0; min-height: 34px; }
 .gp-task-fields { display: flex; flex-wrap: wrap; gap: 3px 12px; margin-top: 5px; font-size: 12px; }
 .gp-task-field { overflow-wrap: anywhere; min-width: 0; }
 .gp-task-field > span { opacity: .7; }
@@ -792,6 +805,7 @@
   }
 }
 @media (max-width: 560px) {
+  .gp-app .gp-priority-options button { min-width: 44px; }
   .gp-app .gp-icon-button {
     width: 44px;
     height: 44px;
@@ -854,13 +868,7 @@
   .gp-top {
     gap: 12px;
   }
-  .gp-toolbar > input {
-    flex-basis: 100%;
-  }
-  .gp-toolbar > select {
-    flex: 1;
-    width: 45%;
-  }
+  .gp-field-visibility summary, .gp-field-visibility label { min-height: 44px; }
   .gp-modal {
     padding: 20px;
   }
@@ -925,18 +933,13 @@
     width: 100%;
     min-height: 44px;
   }
-  .gp-toolbar > select {
-    flex: 0 0 100%;
-    width: 100%;
-    min-height: 44px;
-  }
-  .gp-toolbar > .gp-segment {
-    width: 100%;
-  }
-  .gp-toolbar > .gp-segment button {
-    flex: 1;
-    min-height: 44px;
-  }
+  .gp-view-options { width: 100%; margin-left: 0; }
+  .gp-view-options > select { flex: 1; width: 45%; }
+  .gp-view-options .gp-segment { flex: 1; }
+  .gp-view-options .gp-segment button { flex: 1; }
+  .gp-filter-controls .gp-field-filter { flex: 1 1 130px; }
+  .gp-field-filter select, .gp-field-filter input { width: 100%; }
+  .gp-priority-filter { flex-basis: 100%; }
 }
 
 .gp-connected-projects {
