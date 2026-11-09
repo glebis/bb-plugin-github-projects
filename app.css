@@ -387,7 +387,7 @@
   min-height: 220px;
 }
 .gp-column-collapsed .gp-column-header {
-  flex-direction: column-reverse;
+  flex-direction: column;
   margin: 0;
   padding: 2px;
 }
