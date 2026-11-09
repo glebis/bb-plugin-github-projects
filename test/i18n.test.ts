@@ -34,7 +34,7 @@ test("all English messages are complete and preserve the source interpolation va
 });
 
 test("interface translation calls have catalog entries and visible Russian prose is not hardcoded", () => {
-  for (const path of ["../app.tsx", "../src/ui/comments.tsx", "../src/ui/project-field-editor.tsx"]) {
+  for (const path of ["../app.tsx", "../src/ui/comments.tsx", "../src/ui/project-field-editor.tsx", "../src/ui/assignee-select.tsx"]) {
     const text = readFileSync(new URL(path, import.meta.url), "utf8");
     const file = ts.createSourceFile(path, text, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
     function inspect(node: ts.Node) {

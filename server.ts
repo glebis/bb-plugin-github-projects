@@ -437,6 +437,23 @@ export function createPlugin(
             url: item.url,
           });
         }),
+      assignees_list: async ({ projectKey: key, repository, query }) => {
+        const snapshot = await projectFor(key);
+        const repo = parseRepository(repository ?? null);
+        const opts = await options();
+        if (repo) return { users: await commentServices.suggestCommentUsers(repo, query, opts) };
+        if (!viewer) viewer = { login: await github.fetchViewerLogin(opts), fetched: Date.now() };
+        const known = new Map<string, { login: string; name: string | null; avatarUrl: string | null }>();
+        for (const item of snapshot.board!.items) {
+          for (const user of item.assignees) {
+            const id = user.login.toLowerCase();
+            if (!known.has(id)) known.set(id, { login: user.login, name: null, avatarUrl: user.avatarUrl });
+          }
+        }
+        if (!known.has(viewer.login.toLowerCase())) known.set(viewer.login.toLowerCase(), { login: viewer.login, name: null, avatarUrl: null });
+        const search = query.toLowerCase();
+        return { users: [...known.values()].filter(user => user.login.toLowerCase().includes(search) || user.name?.toLowerCase().includes(search)) };
+      },
       comment_users: async ({ projectKey: key, itemId, query }) => {
         const { item } = await itemFor(key, itemId);
         if (!item.repository) return { users: [] };

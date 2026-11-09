@@ -2,11 +2,12 @@ import { appMessages } from "./app-messages";
 import { commentMessages } from "./comment-messages";
 import { serverMessages } from "./server-messages";
 import { fieldMessages } from "./field-messages";
+import { assigneeMessages } from "./assignee-messages";
 
 export type Locale = "en" | "ru";
 export type Values = Record<string, string | number>;
 export const languageKey = "bb-github-projects:language";
-export const messages: Record<string, string> = { ...serverMessages, ...appMessages, ...commentMessages, ...fieldMessages };
+export const messages: Record<string, string> = { ...serverMessages, ...appMessages, ...commentMessages, ...fieldMessages, ...assigneeMessages };
 export function normalizeLocale(value: unknown): Locale { return value === "ru" ? "ru" : "en"; }
 export function readLocale(storage: Pick<Storage, "getItem"> | undefined): Locale {
   try { return normalizeLocale(storage?.getItem(languageKey)); } catch { return "en"; }

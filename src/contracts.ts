@@ -198,6 +198,10 @@ export const rpcContract = defineRpcContract({
     input: z.object({ ...itemRef, body: z.string().trim().min(1).max(65536) }),
     output: mutationResultSchema,
   },
+  assignees_list: {
+    input: z.object({ projectKey: z.string().min(1), repository: z.string().nullable().optional(), query: z.string().trim().max(80) }),
+    output: z.object({ users: z.array(z.object({ login: z.string(), name: z.string().nullable(), avatarUrl: z.string().nullable() })) }),
+  },
   comment_users: {
     input: z.object({ ...itemRef, query: z.string().trim().max(80) }),
     output: z.object({

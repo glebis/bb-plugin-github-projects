@@ -1,3 +1,5 @@
+import { AssigneeSelect } from "./src/ui/assignee-select";
+import { sameAssignees } from "./src/ui/assignee-options";
 import { activeFieldFilterCount, customFields, fieldPreferencesKey, matchesFieldFilters, sanitizeFieldPreferences, toggleFieldFilter, unsetFieldFilter, visibleFields, type FieldPreferences } from "./src/ui/field-preferences";
 import { ProjectFieldEditor } from "./src/ui/project-field-editor";
 import { editableFields, fieldChanges, fieldDisplayValue } from "./src/ui/project-fields";
@@ -55,11 +57,6 @@ function persist(key: string, value: unknown) {
   } catch {}
 }
 const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
-const logins = (value: string) =>
-  value
-    .split(/[\s,]+/)
-    .map((s) => s.trim())
-    .filter(Boolean);
 const complete = (t: ProjectItem) =>
   t.state === "CLOSED" || t.state === "MERGED";
 function Modal({
@@ -79,6 +76,7 @@ function Modal({
       ?.querySelector<HTMLElement>("button,input,select,textarea")
       ?.focus();
     const key = (e: KeyboardEvent) => {
+      if (e.defaultPrevented) return;
       if (e.key === "Escape") onClose();
       if (e.key === "Tab") {
         const nodes = Array.from(
@@ -1427,7 +1425,7 @@ function TaskDetail({
     [title, setTitle] = useState(item.title),
     [body, setBody] = useState(item.body),
     [assignees, setAssignees] = useState(
-      item.assignees.map((a) => a.login).join(", "),
+      item.assignees.map((a) => a.login),
     ),
     [values, setValues] = useState<Record<string, string>>({}),
     [error, setError] = useState(""),
@@ -1446,7 +1444,7 @@ function TaskDetail({
   const baseline = useRef({
     title: item.title,
     body: item.body,
-    assignees: item.assignees.map((a) => a.login).join(", "),
+    assignees: item.assignees.map((a) => a.login),
   });
   const assignmentIncomplete = item.warnings.some((w) => /assignees/i.test(w));
   const ref = { projectKey: snapshot.key, itemId: item.itemId };
@@ -1497,8 +1495,8 @@ function TaskDetail({
               ...(title !== baseline.current.title ? { title } : {}),
               ...(body !== baseline.current.body ? { body } : {}),
               ...(!assignmentIncomplete &&
-              assignees !== baseline.current.assignees
-                ? { assignees: logins(assignees) }
+              !sameAssignees(assignees, baseline.current.assignees)
+                ? { assignees }
                 : {}),
             }
           : {}),
@@ -1526,7 +1524,7 @@ function TaskDetail({
     canEdit &&
     (title !== baseline.current.title ||
       body !== baseline.current.body ||
-      (!assignmentIncomplete && assignees !== baseline.current.assignees));
+      (!assignmentIncomplete && !sameAssignees(assignees, baseline.current.assignees)));
   let dirtyFields = false;
   try {
     dirtyFields = board.viewerCanUpdate && fieldChanges(board, item, values).length > 0;
@@ -1587,23 +1585,11 @@ function TaskDetail({
               rows={6}
             />
           </label>
-          <label>{t("Исполнители · GitHub logins")}<input
-              disabled={assignmentIncomplete}
-              value={assignees}
-              onChange={(e) => setAssignees(e.target.value)}
-              placeholder="login, another-login"
-              list="gp-assignee-options"
-            />
-          </label>
-          <datalist id="gp-assignee-options">
-            {[
-              ...new Set(
-                board.items.flatMap((t) => t.assignees.map((a) => a.login)),
-              ),
-            ].map((l) => (
-              <option key={l} value={l} />
-            ))}
-          </datalist>
+          <AssigneeSelect rpc={rpc} projectKey={snapshot.key} repository={item.repository}
+            selected={assignees} onChange={setAssignees}
+            knownUsers={board.items.flatMap(candidate => candidate.assignees)}
+            disabled={assignmentIncomplete || pending || commentBusy || !canEdit || !detail}/>
+
         </fieldset>
         <ProjectFieldEditor board={board} item={item} drafts={values} onChange={setValues} disabled={pending||commentBusy||!board.viewerCanUpdate}/>
         <button
@@ -1690,7 +1676,7 @@ function CreateTask({
   const [target, setTarget] = useState(initialTarget),
     [title, setTitle] = useState(""),
     [body, setBody] = useState(""),
-    [assignees, setAssignees] = useState(""),
+    [assignees, setAssignees] = useState<string[]>([]),
     [repository, setRepository] = useState(() => repositoryFor(initialTarget)),
     [repositoryEdited, setRepositoryEdited] = useState(false),
     [pending, setPending] = useState(false),
@@ -1710,7 +1696,7 @@ function CreateTask({
         projectKey: target,
         title,
         body,
-        assignees: logins(assignees),
+        assignees,
         repository: repository.trim() || null,
         fields,
       });
@@ -1739,17 +1725,17 @@ function CreateTask({
             rows={5}
           />
         </label>
-        <label>{t("Исполнители · GitHub logins")}<input
-            value={assignees}
-            onChange={(e) => setAssignees(e.target.value)}
-            placeholder="login, another-login"
-          />
-        </label>
+        <AssigneeSelect rpc={rpc} projectKey={target} repository={repository.trim() || null}
+          selected={assignees} onChange={setAssignees}
+          knownUsers={creatable.find(project => project.key === target)?.board?.items.flatMap(candidate => candidate.assignees) ?? []}
+          disabled={pending || !creatable.find(project => project.key === target)?.board?.viewerCanUpdate}/>
+
         <label>{t("Проект")}<select
             value={target}
             onChange={(e) => {
               setTarget(e.target.value);
               setFieldDrafts({});
+              setAssignees([]);
               if (!repositoryEdited)
                 setRepository(repositoryFor(e.target.value));
             }}
@@ -1766,6 +1752,7 @@ function CreateTask({
             onChange={(e) => {
               setRepository(e.target.value);
               setRepositoryEdited(true);
+              setAssignees([]);
             }}
             placeholder="owner/repository"
           />
