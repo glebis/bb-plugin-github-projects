@@ -1,5 +1,6 @@
 import {
   targetSchema,
+  fieldValueSchema,
   type ProjectTarget,
   type ProjectBoard,
   type ProjectItem,
@@ -82,6 +83,10 @@ export function validateFieldChange(
   const field = board.fields.find((candidate) => candidate.id === fieldId);
   if (!field)
     throw new Error("Поле не принадлежит выбранному проекту. Обновите проект.");
+  if (!["SINGLE_SELECT", "DATE", "TEXT", "NUMBER"].includes(field.dataType))
+    throw new Error("Это поле GitHub недоступно для редактирования.");
+  if (!fieldValueSchema.safeParse(value).success)
+    throw new Error("Неподдерживаемое значение поля.");
   if (value === null) return;
   if ("singleSelectOptionId" in value) {
     if (

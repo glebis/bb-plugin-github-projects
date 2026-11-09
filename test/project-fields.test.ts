@@ -1,0 +1,15 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import type { ProjectItem } from '../src/contracts';
+import { editableFields, fieldChanges, fieldInputValue, fieldDisplayValue } from '../src/ui/project-fields';
+const board = { fields: [{ id: 'title', name: 'Title', dataType: 'TITLE' }, { id: 'text', name: 'Notes', dataType: 'TEXT' }, { id: 'number', name: 'Estimate', dataType: 'NUMBER' }, { id: 'date', name: 'Due', dataType: 'DATE' }, { id: 'select', name: 'Priority', dataType: 'SINGLE_SELECT', options: [{ id: 'p1', name: 'High' }, { id: 'p2', name: 'Low' }] }, { id: 'iteration', name: 'Sprint', dataType: 'ITERATION' }, { id: 'labels', name: 'Labels', dataType: 'LABELS' }] };
+const item = { text: { Notes: 'existing', Due: '2026-11-09' }, numbers: { Estimate: 0 }, singleSelect: { Priority: 'High' } } as ProjectItem;
+test('editable field discovery excludes title and linked/unsupported fields', () => { assert.deepEqual(editableFields(board).map(f => f.id), ['text', 'number', 'date', 'select']); assert.equal(fieldInputValue(board.fields[2], item), '0'); assert.equal(fieldInputValue(board.fields[4], item), 'p1'); assert.equal(fieldDisplayValue(board.fields[4], item), 'High'); });
+test('only changed touched fields produce typed patches and clearing is null', () => { assert.deepEqual(fieldChanges(board, item, {}), []); assert.deepEqual(fieldChanges(board, item, { text: 'existing', number: '0.00', select: 'p1' }), []); assert.deepEqual(fieldChanges(board, item, { text: '', date: '', select: '' }), [{ fieldId: 'text', value: null }, { fieldId: 'date', value: null }, { fieldId: 'select', value: null }]); assert.deepEqual(fieldChanges(board, null, { text: '', number: '' }), []); });
+test('number values preserve zero, negative, decimal and exponent forms', () => { for (const [raw, expected] of [['0', 0], ['-3', -3], ['.25', .25], ['1.75', 1.75], ['1e2', 100]] as const)
+    assert.deepEqual(fieldChanges(board, null, { number: raw }), [{ fieldId: 'number', value: { number: expected } }]); for (const value of ['1foo', 'Infinity', 'NaN', '1,5', '-', '1e', ' ', '1e999'])
+    assert.throws(() => fieldChanges(board, null, { number: value })); });
+test('text remains literal and enforces API limit', () => { assert.deepEqual(fieldChanges(board, item, { text: '  hello  ' }), [{ fieldId: 'text', value: { text: '  hello  ' } }]); assert.throws(() => fieldChanges(board, null, { text: 'x'.repeat(1025) })); });
+test('select options, dates and field membership are validated before save', () => { assert.deepEqual(fieldChanges(board, item, { select: 'p2', date: '2028-02-29' }), [{ fieldId: 'select', value: { singleSelectOptionId: 'p2' } }, { fieldId: 'date', value: { date: '2028-02-29' } }]); for (const value of ['2026-02-29', '2026-13-01', '2026-11-31', 'yesterday'])
+    assert.throws(() => fieldChanges(board, item, { date: value })); for (const drafts of [{ foreign: '' }, { iteration: '' }, { labels: '' }, { title: 'new' }, { select: 'foreign' }, { number: 'p1' }])
+    assert.throws(() => fieldChanges(board, item, drafts)); });

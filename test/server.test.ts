@@ -303,3 +303,60 @@ test('successful write stays successful when its follow-up refresh fails', async
   assert.equal(committed, 1);
   assert.match(result.warning, /offline after commit/);
 });
+
+test('creation prevalidates all custom fields and duplicate IDs before any GitHub write', async t => {
+  const value = board();
+  value.fields.push({ id: 'title', name: 'Title', dataType: 'TITLE' });
+  const h = await setup(t, { fetchProjectBoard: async () => value });
+  const input = { projectKey, title: 'new', body: '', assignees: [], repository: null };
+  for (const fields of [
+    [{ fieldId: 'foreign', value: null }],
+    [{ fieldId: 'title', value: null }],
+    [{ fieldId: 'status', value: { number: 1 } }],
+    [{ fieldId: 'status', value: { singleSelectOptionId: 'todo', text: 'extra' } }],
+    [{ fieldId: 'status', value: null }, { fieldId: 'status', value: null }],
+  ]) await assert.rejects(h.rpc('item_create', { ...input, fields }));
+  assert.deepEqual(h.writes, []);
+});
+
+test('creation applies supported field values after creating the project item', async t => {
+  const value = board();
+  value.fields.push({ id: 'text', name: 'Notes', dataType: 'TEXT' }, { id: 'number', name: 'Estimate', dataType: 'NUMBER' });
+  const sequence: unknown[] = [];
+  const h = await setup(t, { fetchProjectBoard: async () => value,
+    createProjectTask: async () => { sequence.push('create'); return { itemId: 'created-item', contentId: 'created-draft', url: null }; },
+    setProjectField: async (projectId, itemId, fieldId, fieldValue) => { sequence.push({ projectId, itemId, fieldId, value: fieldValue }); },
+  });
+  const fields = [{ fieldId: 'status', value: { singleSelectOptionId: 'todo' } }, { fieldId: 'date', value: { date: '2028-02-29' } }, { fieldId: 'text', value: { text: 'Notes' } }, { fieldId: 'number', value: { number: -1.25 } }];
+  const result = await h.rpc('item_create', { projectKey, title: 'new', body: '', assignees: [], repository: null, fields });
+  assert.equal(result.ok, true); assert.equal(result.itemId, 'created-item'); assert.equal(result.warning, null);
+  assert.deepEqual(sequence, ['create', ...fields.map(field => ({ projectId: 'p', itemId: 'created-item', ...field }))]);
+});
+
+test('post-creation field failure retains created item and URL with partial-success warning', async t => {
+  let saves = 0; let creates = 0;
+  const url = 'https://github.com/acme/repo/issues/45';
+  const h = await setup(t, { createProjectTask: async () => { creates++; return { itemId: 'created', contentId: 'issue45', url }; },
+    setProjectField: async () => { if (++saves === 2) throw new Error('field denied'); },
+  });
+  const result = await h.rpc('item_create', { projectKey, title: 'new', body: '', assignees: [], repository: 'acme/repo', fields: [{ fieldId: 'status', value: { singleSelectOptionId: 'todo' } }, { fieldId: 'date', value: null }] });
+  assert.equal(result.ok, true); assert.equal(result.itemId, 'created'); assert.equal(result.url, url);
+  assert.match(result.warning, /field denied/); assert.match(result.warning, /\(1\)/); assert.match(result.warning, /Не создавайте/);
+  assert.doesNotMatch(result.message, /не добавлена/); assert.equal(creates, 1); assert.equal(saves, 2);
+});
+
+test('failed project attachment skips field writes and preserves original recovery result', async t => {
+  let saves = 0;
+  const h = await setup(t, { createProjectTask: async () => ({ itemId: null, contentId: 'issue', url: 'https://github.com/acme/repo/issues/99', warning: 'attachment failed' }), setProjectField: async () => { saves++; } });
+  const result = await h.rpc('item_create', { projectKey, title: 'new', body: '', assignees: [], repository: 'acme/repo', fields: [{ fieldId: 'date', value: null }] });
+  assert.equal(result.ok, true); assert.equal(result.itemId, null); assert.match(result.warning, /attachment failed/); assert.equal(saves, 0);
+});
+
+test('creation rejects disconnected and non-writable projects before creating tasks', async t => {
+  const value = board(); value.viewerCanUpdate = false;
+  const h = await setup(t, { fetchProjectBoard: async () => value });
+  const input = { projectKey, title: 'new', body: '', assignees: [], repository: null, fields: [{ fieldId: 'date', value: null }] };
+  await assert.rejects(h.rpc('item_create', input));
+  await assert.rejects(h.rpc('item_create', { ...input, projectKey: 'foreign:1' }));
+  assert.deepEqual(h.writes, []);
+});

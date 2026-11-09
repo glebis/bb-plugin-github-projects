@@ -65,3 +65,18 @@ test("suggested repository follows the project, not the global default", () => {
   assert.equal(suggestedRepository(items([null]), "glebis/workroom"), "glebis/workroom");
   assert.equal(suggestedRepository(null, ""), "");
 });
+
+test('custom field values validate exact shapes and reject clearing built-in fields', () => {
+  const board = { fields: [
+    { id: 'text', name: 'Note', dataType: 'TEXT' },
+    { id: 'number', name: 'Estimate', dataType: 'NUMBER' },
+    { id: 'title', name: 'Title', dataType: 'TITLE' },
+  ] } as ProjectBoard;
+  for (const number of [0, -2.5, 1.25]) validateFieldChange(board, 'number', { number });
+  validateFieldChange(board, 'text', { text: '' });
+  validateFieldChange(board, 'text', { text: 'Details' });
+  validateFieldChange(board, 'text', null);
+  assert.throws(() => validateFieldChange(board, 'title', null));
+  for (const value of [{}, { text: 'x', number: 1 }, { text: 42 }, { text: 'x'.repeat(1025) }, { number: Infinity }, { unexpected: true }])
+    assert.throws(() => validateFieldChange(board, 'text', value as any));
+});

@@ -384,19 +384,34 @@ export function createPlugin(
             throw new Error(
               "У текущей учётной записи нет прав добавлять задачи в проект.",
             );
+          for (const field of input.fields ?? [])
+            validateFieldChange(snapshot.board!, field.fieldId, field.value);
+          const opts = await options();
           const result = await github.createProjectTask(
             snapshot.board!.id,
             input.title,
             input.body,
             input.assignees,
             parseRepository(input.repository),
-            await options(),
+            opts,
           );
+          let warning = result.warning ?? null;
+          let fieldsFailed = false;
+          if (result.itemId && !result.warning) {
+            let saved = 0;
+            try {
+              for (const field of input.fields ?? []) {
+                await github.setProjectField(snapshot.board!.id, result.itemId, field.fieldId, field.value, opts);
+                saved++;
+              }
+            } catch (error) {
+              fieldsFailed = true;
+              warning = `Задача создана, но поля сохранены не полностью (${saved}). ${message(error)}. Не создавайте задачу повторно: проверьте её поля в GitHub.`;
+            }
+          }
           return afterWrite(snapshot, {
-            message: result.warning
-              ? "Задача создана, но не добавлена в проект"
-              : "Задача создана в GitHub",
-            warning: result.warning ?? null,
+            message: fieldsFailed ? "Задача создана, часть полей не сохранена" : result.warning ? "Задача создана, но не добавлена в проект" : "Задача создана в GitHub",
+            warning,
             itemId: result.itemId,
             url: result.url,
           });

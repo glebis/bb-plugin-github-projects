@@ -1,3 +1,6 @@
+import { customFields, fieldPreferencesKey, matchesFieldFilters, sanitizeFieldPreferences, unsetFieldFilter, visibleFields, type FieldPreferences } from "./src/ui/field-preferences";
+import { ProjectFieldEditor } from "./src/ui/project-field-editor";
+import { editableFields, fieldChanges, fieldDisplayValue } from "./src/ui/project-fields";
 import { I18nProvider, useI18n } from "./src/ui/i18n";
 import { TaskComments } from "./src/ui/comments";
 import { IconButton } from "./src/ui/icon-button";
@@ -175,6 +178,11 @@ function WorkspacePage({ subPath }: PluginNavPanelProps) {
   const [views, setViews] = useState<Record<string, "list" | "board">>(() =>
     viewMap(stored(viewKeys.views, stored("gp-views", {}))),
   );
+  const [fieldPreferences, setFieldPreferences] = useState(() => sanitizeFieldPreferences(stored(fieldPreferencesKey, {})));
+  useEffect(() => persist(fieldPreferencesKey, fieldPreferences), [fieldPreferences]);
+  function changeFieldPreferences(projectKey: string, patch: Partial<FieldPreferences>) {
+    setFieldPreferences(previous => ({ ...previous, [projectKey]: { ...previous[projectKey], ...patch, filters: patch.filters ?? previous[projectKey]?.filters ?? {} } }));
+  }
   const rootRef = useRef<HTMLDivElement>(null);
   const serial = useRef(0),
     initialized = useRef(false),
@@ -387,7 +395,8 @@ function WorkspacePage({ subPath }: PluginNavPanelProps) {
         item.assignees.some((a) => a.login === route.assignee)) &&
       (!route.status ||
         (item.singleSelect[p.board?.statusField?.name || ""] ||
-          "Без статуса") === route.status),
+          "Без статуса") === route.status) &&
+      (!current?.board || matchesFieldFilters(current.board, item, fieldPreferences[current.key]?.filters ?? {})),
   );
   if (route.sort === "title")
     filtered.sort((a, b) => a.item.title.localeCompare(b.item.title, locale));
@@ -487,6 +496,11 @@ function WorkspacePage({ subPath }: PluginNavPanelProps) {
     const isGithubOption = projects.some(p => p.board?.statusField?.options.some(option => option.name === name));
     return name === "Без статуса" && !isGithubOption ? t("Без статуса") : name;
   };
+  const activeCustomFilters = !!current && Object.values(fieldPreferences[current.key]?.filters ?? {}).some(Boolean);
+  function clearFilters() {
+    if (current) changeFieldPreferences(current.key, { filters: {} });
+    update({ q: "", assignee: "", status: "" }, true);
+  }
   function groupRows() {
     const isBoard = route.view === "board";
     const groupNames = current?.board?.statusField
@@ -524,9 +538,9 @@ function WorkspacePage({ subPath }: PluginNavPanelProps) {
         <div className="gp-empty">
           <h3>{t("Задач по этим условиям нет")}</h3>
           <p>{t("Сбросьте фильтры или создайте задачу. Остальные проекты доступны.")}</p>
-          {(route.q || route.assignee || route.status) && (
+          {(route.q || route.assignee || route.status || activeCustomFilters) && (
             <button
-              onClick={() => update({ q: "", assignee: "", status: "" }, true)}
+              onClick={clearFilters}
             >{t("Сбросить фильтры")}</button>
           )}{" "}
           <button
@@ -708,6 +722,15 @@ function WorkspacePage({ subPath }: PluginNavPanelProps) {
                             item.commentCount > 0 &&
                             t(" · Комментарии: {value0}", {value0: number(item.commentCount)})}
                         </small>
+                        {p.board && <span className="gp-task-fields">
+                          {visibleFields(p.board, fieldPreferences[p.key]).map(field => {
+                            const value = fieldDisplayValue(field, item);
+                            if (!value) return null;
+                            const formatted = field.dataType === "DATE" ? formatDate(value, { day: "numeric", month: "short" })
+                              : field.dataType === "NUMBER" ? number(Number(value)) : value;
+                            return <span key={field.id} className="gp-task-field"><span>{field.name}:</span> {formatted}</span>;
+                          })}
+                        </span>}
                       </span>
                       {visible.date &&
                         due &&
@@ -1042,6 +1065,38 @@ function WorkspacePage({ subPath }: PluginNavPanelProps) {
                 ))}
               </div>
             </div>
+            {current?.board && customFields(current.board).length > 0 && (
+              <div className="gp-custom-controls" aria-label={t("Настройки полей проекта")}>
+                {customFields(current.board).map(field => (
+                  <label className="gp-field-filter" key={field.id}>
+                    {field.name}
+                    {field.dataType === "SINGLE_SELECT" ? <select
+                      value={fieldPreferences[current.key]?.filters[field.id] ?? ""}
+                      onChange={event => changeFieldPreferences(current.key, { filters: { ...fieldPreferences[current.key]?.filters, [field.id]: event.target.value } })}>
+                      <option value="">{t("Все значения")}</option>
+                      <option value={unsetFieldFilter}>{t("Не задано")}</option>
+                      {field.options?.map(option => <option key={option.id} value={option.id}>{option.name}</option>)}
+                    </select> : <input
+                      type={field.dataType === "DATE" ? "date" : "text"}
+                      inputMode={field.dataType === "NUMBER" ? "decimal" : undefined}
+                      placeholder={t("Фильтр по полю")}
+                      value={fieldPreferences[current.key]?.filters[field.id] ?? ""}
+                      onChange={event => changeFieldPreferences(current.key, { filters: { ...fieldPreferences[current.key]?.filters, [field.id]: event.target.value } })}/>}
+                  </label>
+                ))}
+                {activeCustomFilters && <button onClick={clearFilters}>{t("Сбросить фильтры")}</button>}
+                <details className="gp-field-visibility">
+                  <summary>{t("Поля на карточках")}</summary>
+                  <div>{customFields(current.board).map(field => <label key={field.id}>
+                    <input type="checkbox" checked={visibleFields(current.board!, fieldPreferences[current.key]).some(visible => visible.id === field.id)}
+                      onChange={event => {
+                        const ids = visibleFields(current.board!, fieldPreferences[current.key]).map(visible => visible.id);
+                        changeFieldPreferences(current.key, { visible: event.target.checked ? [...ids, field.id] : ids.filter(id => id !== field.id) });
+                      }}/>{field.name}
+                  </label>)}</div>
+                </details>
+              </div>
+            )}
             {current?.board && (
               <div className="gp-meta">
                 <span>
@@ -1424,26 +1479,7 @@ function TaskDetail({
     setError("");
     setSaved("");
     try {
-      const fields = Object.entries(values)
-        .filter(([id, value]) => {
-          const f = board.singleSelectFields.find((f) => f.id === id);
-          const old = f
-            ? f.options.find((o) => o.name === item.singleSelect[f.name])?.id ||
-              ""
-            : item.text[
-                board.dateFields.find((f) => f.id === id)?.name || ""
-              ] || "";
-          return value !== old;
-        })
-        .map(([fieldId, value]) => ({
-          fieldId,
-          value:
-            value === ""
-              ? null
-              : board.dateFields.some((f) => f.id === fieldId)
-                ? { date: value }
-                : { singleSelectOptionId: value },
-        }));
+      const fields = fieldChanges(board,item,values);
       const r = await rpc.call("item_update", {
         ...ref,
         ...(canEdit && detail
@@ -1458,9 +1494,13 @@ function TaskDetail({
           : {}),
         ...(board.viewerCanUpdate ? { fields } : {}),
       });
-      setSaved(r.warning ? r.message + " " + r.warning : r.message);
-      baseline.current = { title, body, assignees };
-      setValues({});
+      setSaved(r.warning
+        ? r.message + " " + r.warning + " GitHub вернул предупреждение. Введённые значения полей сохранены в форме. Проверьте задачу и оставшиеся изменения перед повторным сохранением."
+        : r.message);
+      if (!r.warning) {
+        baseline.current = { title, body, assignees };
+        setValues({});
+      }
       await onDone(r);
       await load();
     } catch (e) {
@@ -1477,19 +1517,13 @@ function TaskDetail({
     (title !== baseline.current.title ||
       body !== baseline.current.body ||
       (!assignmentIncomplete && assignees !== baseline.current.assignees));
-  const dirtyFields =
-    board.viewerCanUpdate &&
-    Object.entries(values).some(([id, value]) => {
-      const f = board.singleSelectFields.find((f) => f.id === id);
-      return (
-        value !==
-        (f
-          ? f.options.find((o) => o.name === item.singleSelect[f.name])?.id ||
-            ""
-          : item.text[board.dateFields.find((f) => f.id === id)?.name || ""] ||
-            "")
-      );
-    });
+  let dirtyFields = false;
+  try {
+    dirtyFields = board.viewerCanUpdate && fieldChanges(board, item, values).length > 0;
+  } catch {
+    // Keep invalid raw input visible and let explicit Save show its validation error.
+    dirtyFields = board.viewerCanUpdate && Object.keys(values).length > 0;
+  }
   return (
     <>
       <div className="gp-detail-links">
@@ -1561,45 +1595,7 @@ function TaskDetail({
             ))}
           </datalist>
         </fieldset>
-        <fieldset disabled={pending || commentBusy || !board.viewerCanUpdate}>
-          <div className="gp-fields">
-            {board.singleSelectFields.map((f) => (
-              <label key={f.id}>
-                {f.name}
-                <select
-                  value={
-                    values[f.id] ??
-                    f.options.find((o) => o.name === item.singleSelect[f.name])
-                      ?.id ??
-                    ""
-                  }
-                  onChange={(e) =>
-                    setValues({ ...values, [f.id]: e.target.value })
-                  }
-                >
-                  <option value="">{t("Не задано")}</option>
-                  {f.options.map((o) => (
-                    <option key={o.id} value={o.id}>
-                      {o.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            ))}
-            {board.dateFields.map((f) => (
-              <label key={f.id}>
-                {f.name}
-                <input
-                  type="date"
-                  value={values[f.id] ?? item.text[f.name] ?? ""}
-                  onChange={(e) =>
-                    setValues({ ...values, [f.id]: e.target.value })
-                  }
-                />
-              </label>
-            ))}
-          </div>
-        </fieldset>
+        <ProjectFieldEditor board={board} item={item} drafts={values} onChange={setValues} disabled={pending||commentBusy||!board.viewerCanUpdate}/>
         <button
           className="gp-primary"
           disabled={pending || commentBusy || (!dirtyContent && !dirtyFields)}
@@ -1613,10 +1609,8 @@ function TaskDetail({
       <section className="gp-detail-section">
         <h3>{t("Другие поля GitHub")}</h3>
         {[
-          ...Object.entries(item.text).filter(
-            ([name]) => !board.dateFields.some((f) => f.name === name),
-          ),
-          ...Object.entries(item.numbers),
+          ...Object.entries(item.text).filter(([name])=>!editableFields(board).some(field=>field.name===name)),
+          ...Object.entries(item.numbers).filter(([name])=>!editableFields(board).some(field=>field.name===name)),
         ].map(([k, v]) => (
           <p key={k}>
             <strong>{k}:</strong> {v}
@@ -1690,7 +1684,8 @@ function CreateTask({
     [repository, setRepository] = useState(() => repositoryFor(initialTarget)),
     [repositoryEdited, setRepositoryEdited] = useState(false),
     [pending, setPending] = useState(false),
-    [error, setError] = useState("");
+    [error, setError] = useState(""),
+    [fieldDrafts,setFieldDrafts]=useState<Record<string,string>>({});
   async function submit(e: FormEvent) {
     e.preventDefault();
     if (pending) return;
@@ -1698,12 +1693,16 @@ function CreateTask({
     onPending(true);
     setError("");
     try {
+      const selectedBoard=creatable.find(p=>p.key===target)?.board;
+      if(!selectedBoard)throw new Error("Поле недоступно для редактирования. Обновите проект.");
+      const fields=fieldChanges(selectedBoard,null,fieldDrafts);
       const r = await rpc.call("item_create", {
         projectKey: target,
         title,
         body,
         assignees: logins(assignees),
         repository: repository.trim() || null,
+        fields,
       });
       onPending(false);
       await onDone(r);
@@ -1740,6 +1739,7 @@ function CreateTask({
             value={target}
             onChange={(e) => {
               setTarget(e.target.value);
+              setFieldDrafts({});
               if (!repositoryEdited)
                 setRepository(repositoryFor(e.target.value));
             }}
@@ -1760,6 +1760,7 @@ function CreateTask({
             placeholder="owner/repository"
           />
         </label>
+        {creatable.find(p=>p.key===target)?.board&&<section><h3>{t("Поля проекта")}</h3><ProjectFieldEditor board={creatable.find(p=>p.key===target)!.board!} item={null} drafts={fieldDrafts} onChange={setFieldDrafts} disabled={pending||!creatable.find(p=>p.key===target)?.board?.viewerCanUpdate}/></section>}
         <p className="gp-muted">
           {!workspace.projects.find((p) => p.key === target)?.board
             ?.viewerCanUpdate

@@ -1,4 +1,8 @@
 export const appMessages: Record<string,string> = {
+  "Настройки полей проекта": "Project field settings",
+  "Все значения": "All values",
+  "Фильтр по полю": "Filter by field",
+  "Поля на карточках": "Card fields",
   "Проекты": "Projects",
   "Проект GitHub #{number}": "GitHub project #{number}",
   "Закрыть": "Close",

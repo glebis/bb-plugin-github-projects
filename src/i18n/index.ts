@@ -1,11 +1,12 @@
 import { appMessages } from "./app-messages";
 import { commentMessages } from "./comment-messages";
 import { serverMessages } from "./server-messages";
+import { fieldMessages } from "./field-messages";
 
 export type Locale = "en" | "ru";
 export type Values = Record<string, string | number>;
 export const languageKey = "bb-github-projects:language";
-export const messages: Record<string, string> = { ...serverMessages, ...appMessages, ...commentMessages };
+export const messages: Record<string, string> = { ...serverMessages, ...appMessages, ...commentMessages, ...fieldMessages };
 export function normalizeLocale(value: unknown): Locale { return value === "ru" ? "ru" : "en"; }
 export function readLocale(storage: Pick<Storage, "getItem"> | undefined): Locale {
   try { return normalizeLocale(storage?.getItem(languageKey)); } catch { return "en"; }
@@ -41,7 +42,7 @@ const patterns = new Map<Locale, Pattern[]>();
 function diagnosticPatterns(locale: Locale) {
   if (!patterns.has(locale)) {
     // Use the final catalog value for duplicate diagnostics so both directions agree.
-    const diagnostics = { ...serverMessages,
+    const diagnostics = { ...serverMessages, ...fieldMessages,
       "Поиск GitHub недоступен; показаны известные участники.": messages["Поиск GitHub недоступен; показаны известные участники."] };
     patterns.set(locale, Object.keys(diagnostics).map((ru) => {
       const en = messages[ru];

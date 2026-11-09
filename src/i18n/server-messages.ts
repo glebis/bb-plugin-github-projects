@@ -1,5 +1,9 @@
 /** Plugin-owned diagnostics. Raw GitHub/CLI diagnostics remain available verbatim. */
 export const serverMessages: Record<string, string> = {
+  "Поле указано несколько раз.": "A field was specified more than once.",
+  "Это поле GitHub недоступно для редактирования.": "This GitHub field cannot be edited.",
+  "Задача создана, часть полей не сохранена": "Task created; some fields were not saved",
+  "Задача создана, но поля сохранены не полностью ({count}). {error}. Не создавайте задачу повторно: проверьте её поля в GitHub.": "Task created, but not all fields were saved ({count}). {error}. Do not create it again: check its fields on GitHub.",
   "Не удалось изменить статус: {error}. Обновите проект перед повторной попыткой.": "Could not change the status: {error}. Refresh the project before trying again.",
   "Настройки изменились. Обновите проекты.": "Settings changed. Refresh the projects.",
   "Проект не подключён. Выберите проект в настройках.": "Project is not connected. Select a project in Settings.",

@@ -118,12 +118,16 @@ export const detailSchema = z.object({
 });
 export type ItemDetail = z.infer<typeof detailSchema>;
 export const fieldValueSchema = z.union([
-  z.object({ singleSelectOptionId: z.string() }),
-  z.object({ date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/) }),
-  z.object({ text: z.string().max(1024) }),
-  z.object({ number: z.number().finite() }),
+  z.object({ singleSelectOptionId: z.string().min(1) }).strict(),
+  z.object({ date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/) }).strict(),
+  z.object({ text: z.string().max(1024) }).strict(),
+  z.object({ number: z.number().finite() }).strict(),
   z.null(),
 ]);
+export const fieldChangesSchema = z.array(z.object({ fieldId: z.string().min(1), value: fieldValueSchema }).strict()).max(100).refine(
+  changes => new Set(changes.map(change => change.fieldId)).size === changes.length,
+  "Поле указано несколько раз.",
+);
 export const mutationResultSchema = z.object({
   ok: z.literal(true),
   message: z.string(),
@@ -175,10 +179,7 @@ export const rpcContract = defineRpcContract({
         .array(z.string().regex(/^[a-z\d-]+$/i))
         .max(10)
         .optional(),
-      fields: z
-        .array(z.object({ fieldId: z.string(), value: fieldValueSchema }))
-        .max(20)
-        .optional(),
+      fields: fieldChangesSchema.optional(),
     }),
     output: mutationResultSchema,
   },
@@ -189,6 +190,7 @@ export const rpcContract = defineRpcContract({
       body: z.string().max(65536),
       assignees: z.array(z.string().regex(/^[a-z\d-]+$/i)).max(10),
       repository: z.string().nullable(),
+      fields: fieldChangesSchema.optional(),
     }),
     output: mutationResultSchema,
   },

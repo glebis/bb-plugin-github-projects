@@ -227,6 +227,27 @@
   font-size: 12px;
   margin-bottom: 18px;
 }
+.gp-custom-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.gp-custom-controls .gp-field-filter {
+  margin: 0;
+  min-width: 130px;
+  max-width: 100%;
+  font-size: 12px;
+}
+.gp-field-filter input, .gp-field-filter select { padding: 6px 8px; }
+.gp-field-visibility { font-size: 12px; max-width: 100%; }
+.gp-field-visibility summary { padding: 7px 0; cursor: pointer; }
+.gp-field-visibility > div { display: flex; flex-wrap: wrap; gap: 10px; }
+.gp-field-visibility label { display: flex; flex-direction: row; align-items: center; gap: 5px; margin: 0; }
+.gp-task-fields { display: flex; flex-wrap: wrap; gap: 3px 12px; margin-top: 5px; font-size: 12px; }
+.gp-task-field { overflow-wrap: anywhere; min-width: 0; }
+.gp-task-field > span { opacity: .7; }
 .gp-meta label {
   flex-direction: row;
   align-items: center;
